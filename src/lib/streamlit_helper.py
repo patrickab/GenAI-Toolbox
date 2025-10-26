@@ -12,47 +12,21 @@ def apply_custom_style() -> None:
     st.markdown(
         """
         <style>
-        /* Overall app background and text color with Cascadia Code */
-        .stApp {
-            background-color: #121212;
-            color: #e0e0e0;
-            font-family: 'Cascadia Code', 'Georgia', 'Times New Roman', serif;
-        }
 
         /* General text inherits Cascadia Code */
         p, div, span, h1, h2, h3, h4, h5, h6 {
-            color: #e0e0e0;
-            font-family: 'Cascadia Code', 'Georgia', 'Times New Roman', serif;
-        }
-
-        /* Input elements with matching dark theme */
-        textarea, input {
-            background-color: #1e1e1e;
-            color: #e0e0e0;
             font-family: 'Cascadia Code', 'Georgia', 'Times New Roman', serif;
         }
 
         /* Code, pre, and LaTeX math uses Roboto Mono with default coloring */
         code, pre, .math {
             font-family: 'Roboto Mono', monospace;
-            background-color: #1e1e1e; /* subtle dark block background */
             padding: 4px 6px;
             border-radius: 6px;
             line-height: 1.4;
             white-space: pre-wrap;
             word-break: break-word;
             user-select: text;
-        }
-
-        /* Box shadow for code blocks */
-        pre {
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
-        }
-
-        /* Hover effect on inline code */
-        code:hover {
-            background-color: #2a2a2a;
-            cursor: text;
         }
 
         /* Increase default page padding */
@@ -70,30 +44,12 @@ def apply_custom_style() -> None:
             position: relative;
         }
 
-        div[data-testid="stAgraph"] canvas {
-            background-color: #1a1a1a !important;
-        }
-
         /* Typography hierarchy */
         .graph-title {
             font-size: 32px;
             margin-bottom: 16px;
         }
 
-        /* Skeleton loader for graph */
-        .graph-skeleton {
-            height: 600px;
-            border-radius: 12px;
-            background: linear-gradient(-90deg,#1a1a1a 0%,#2a2a2a 50%,#1a1a1a 100%);
-            background-size: 400% 400%;
-            animation: shimmer 1.2s ease-in-out infinite;
-            margin-bottom: 24px;
-        }
-
-        @keyframes shimmer {
-            0% {background-position: 200% 0;}
-            100% {background-position: -200% 0;}
-        }
         </style>
         """,
         unsafe_allow_html=True,
