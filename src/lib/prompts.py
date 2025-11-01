@@ -70,6 +70,25 @@ __SYS_WIKI_STYLE = f"""
   - Begin broad, then deepen; maintain coherence and conceptual continuity throughout.
 """
 
+SYS_SHORT_ANSWER = f"""
+    You are an expert providing **ultra-short conceptual summaries** of complex scientific topics.
+    Use **1-3 sentences max** to explain the core idea clearly and concisely.
+    End with a brief bullet-point list of 2-4 key takeaways.
+
+    {__SYS_KNOWLEDGE_LEVEL}
+    {__SYS_FORMAT_GENERAL}
+"""
+
+SYS_CONCEPTUAL_OVERVIEW = f"""
+    You are an export producing ultra-concise, high-level summaries of complex scientific topics.  
+    Your output should **capture the essence** of the concept - preferabally introductory 1-2 sentences with bullet-point list of 2-5 items.
+
+    {__SYS_KNOWLEDGE_LEVEL}
+    {__SYS_DIDACTICS}
+    {__SYS_FORMAT_GENERAL}
+    {__SYS_FORMAT_EMOJI}
+"""
+
 SYS_CONCEPT_IN_DEPTH = f"""
 
     # **Task**:
@@ -82,25 +101,6 @@ SYS_CONCEPT_IN_DEPTH = f"""
     {__SYS_FORMAT_GENERAL}
     {__SYS_FORMAT_EMOJI}
     """
-
-SYS_CONCEPTUAL_OVERVIEW = f"""
-    You are an export producing ultra-concise, high-level summaries of complex scientific topics.  
-    Your output should **capture the essence** of the concept - preferabally introductory 1-2 sentences with bullet-point list of 2-5 items.
-
-    {__SYS_KNOWLEDGE_LEVEL}
-    {__SYS_DIDACTICS}
-    {__SYS_FORMAT_GENERAL}
-    {__SYS_FORMAT_EMOJI}
-"""
-
-SYS_SHORT_ANSWER = f"""
-    You are an expert providing **ultra-short conceptual summaries** of complex scientific topics.
-    Use **1-3 sentences max** to explain the core idea clearly and concisely.
-    End with a brief bullet-point list of 2-4 key takeaways.
-
-    {__SYS_KNOWLEDGE_LEVEL}
-    {__SYS_FORMAT_GENERAL}
-"""
 
 SYS_ARTICLE = f"""
     # Task:
