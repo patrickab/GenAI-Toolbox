@@ -9,6 +9,8 @@ from src.lib.prompts import (
     SYS_CONCEPT_IN_DEPTH,
     SYS_CONCEPTUAL_OVERVIEW,
     SYS_EMPTY_PROMPT,
+    SYS_PRECISE_TASK_EXECUTION,
+    SYS_PROMPT_ARCHITECT,
     SYS_SHORT_ANSWER,
 )
 from src.llm_client import MODELS_GEMINI, MODELS_OPENAI, LLMClient
@@ -26,57 +28,10 @@ AVAILABLE_PROMPTS = {
     "Concept - High-Level": SYS_CONCEPTUAL_OVERVIEW,
     "Concept - In-Depth": SYS_CONCEPT_IN_DEPTH,
     "Concept - Article": SYS_ARTICLE,
+    "Prompt Architect": SYS_PROMPT_ARCHITECT,
+    "Precise Task Execution": SYS_PRECISE_TASK_EXECUTION,
     "<empty prompt>": SYS_EMPTY_PROMPT,
 }
-
-
-def apply_custom_style() -> None:
-    st.markdown(
-        """
-        <style>
-
-        /* General text inherits Cascadia Code */
-        p, div, span, h1, h2, h3, h4, h5, h6 {
-            font-family: 'Cascadia Code', 'Georgia', 'Times New Roman', serif;
-        }
-
-        /* Code, pre, and LaTeX math uses Roboto Mono with default coloring */
-        code, pre, .math {
-            font-family: 'Roboto Mono', monospace;
-            padding: 4px 6px;
-            border-radius: 6px;
-            line-height: 1.4;
-            white-space: pre-wrap;
-            word-break: break-word;
-            user-select: text;
-        }
-
-        /* Increase default page padding */
-        .block-container {
-            padding-left: 3rem;
-            padding-right: 3rem;
-        }
-
-        /* Card styling for graph area */
-        div[data-testid="stAgraph"], .graph-card {
-            background: #1a1a1a;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-            position: relative;
-        }
-
-        /* Typography hierarchy */
-        .graph-title {
-            font-size: 32px;
-            margin-bottom: 16px;
-        }
-
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
 
 def init_session_state() -> None:
     if "client" not in st.session_state:
@@ -109,7 +64,7 @@ def application_side_bar() -> None:
         st.session_state.selected_model = model
 
 def chat_interface() -> None:
-    _, col_center, _ = st.columns([0.05, 0.9, 0.05])
+    _, col_center, _ = st.columns([0.025, 0.95, 0.025])
 
     with st.sidebar:
         st.markdown("---")
@@ -129,7 +84,7 @@ def chat_interface() -> None:
                     st.success(f"Chat history saved to {filename}")
 
     with col_center:
-        st.subheader("Chat Interface")
+        st.header("Learning Assistant")
         st.markdown("---")
         st.write("")  # Spacer
         message_container = st.container()
@@ -142,7 +97,7 @@ def chat_interface() -> None:
             with st.chat_message("user"):
                 st.markdown(prompt)
             with st.chat_message("assistant"):
-                st.session_state.client.chat(model=st.session_state.selected_model, user_message=prompt)
+                st.write_stream(st.session_state.client.chat(model=st.session_state.selected_model, user_message=prompt))
                 st.rerun()
 
 
