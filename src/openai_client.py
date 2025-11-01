@@ -49,7 +49,7 @@ class LLMClient:
 
         assistant_msgs = [msg for role, msg in self.messages if role == "assistant"]
         try:
-            content = assistant_msgs[::-1][idx]
+            content = assistant_msgs[idx]
         except IndexError:
             raise IndexError("idx out of range for assistant messages.")
 
