@@ -1,4 +1,3 @@
-from __future__ import annotations
 import streamlit as st
 
 from src.lib.streamlit_helper import application_side_bar, chat_interface, init_session_state
