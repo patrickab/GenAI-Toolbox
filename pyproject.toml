@@ -21,10 +21,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
 
-[tool.mypy]
-python_version = "3.12"
-python_executable = ".venv/bin/python"
-
 [tool.ruff]
 target-version = "py312"
 respect-gitignore = true

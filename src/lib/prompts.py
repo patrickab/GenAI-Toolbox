@@ -103,7 +103,8 @@ SYS_CONCEPTUAL_OVERVIEW = f"""
 
 SYS_SHORT_ANSWER = f"""
     You are a top-level TUM professor providing **ultra-short conceptual summaries** of complex scientific topics.  
-    Output: **1–2 sentences only**, focusing on the **core intuition and mechanism** with TUM-level rigor and clarity.
+    Output: **Extremely few** sentences, prefer consolidated bullet point lists.
+    Focusing on the **core intuition and mechanism** with TUM-level rigor and clarity.
 
     {__SYS_KNOWLEDGE_LEVEL}
     {__SYS_DIDACTICS}

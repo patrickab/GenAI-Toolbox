@@ -35,12 +35,6 @@ class LLMClient:
         if GEMINI_API_KEY is not None:
             self.gemini_client = GeminiClient(api_key=GEMINI_API_KEY)
 
-    def _add_user_message(self, content: str) -> None:
-        self.messages.append(("user", content))
-
-    def _add_assistant_message(self, content: str) -> None:
-        self.messages.append(("assistant", content))
-
     def _set_system_prompt(self, system_prompt: str) -> None:
         self.system_prompt = system_prompt
 
@@ -68,12 +62,12 @@ class LLMClient:
             f.write(content)
 
     def chat(self, model: str, user_message: str) -> str:
-        self._add_user_message(user_message)
+        self.messages.append(("user", user_message))
 
         if model in MODELS_OPENAI:
             messages = (
                 [{"role": "system", "content": self.system_prompt}] if self.system_prompt else []
-            ) + [{"role": r, "content": m} for r, m in self.messages]
+            ) + [{"role": role, "content": msg} for role, msg in self.messages]
 
             response = self.openai_client.chat.completions.create(
                 model=model,
@@ -93,10 +87,10 @@ class LLMClient:
 
             response = self.gemini_client.models.generate_content(
                 model=model,
-                config=types.GenerateContentConfig(system_instruction=self.system_prompt, top_p=0.94, temperature=0.2),
+                config=types.GenerateContentConfig(system_instruction=self.system_prompt, top_p=0.96, temperature=0.2),
                 contents=contents,
             )
             response = getattr(response, "text", None)
 
-        self._add_assistant_message(response)
+        self.messages.append(("assistant", response))
         return response

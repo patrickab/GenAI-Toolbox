@@ -8,7 +8,6 @@ import streamlit as st
 from src.lib.prompts import (
     SYS_CONCEPTUAL_OVERVIEW,
     SYS_EMPTY_PROMPT,
-    SYS_LEARNING_MATERIAL,
     SYS_OBSIDIAN_NOTE,
     SYS_PROFESSOR_EXPLAINS,
     SYS_SHORT_ANSWER,
@@ -25,10 +24,9 @@ if os.getenv("GEMINI_API_KEY") is not None:
 
 AVAILABLE_PROMPTS = {
     "Short Answer": SYS_SHORT_ANSWER,
-    "Obsidian Note": SYS_OBSIDIAN_NOTE,
+    "Obsidian Note - Article": SYS_OBSIDIAN_NOTE,
     "High-Level Concept": SYS_CONCEPTUAL_OVERVIEW,
     "In-Depth Concept": SYS_PROFESSOR_EXPLAINS,
-    "Create Wiki Article": SYS_LEARNING_MATERIAL,
     "<empty prompt>": SYS_EMPTY_PROMPT,
 }
 
@@ -84,10 +82,10 @@ def apply_custom_style() -> None:
 def init_session_state() -> None:
     if "client" not in st.session_state:
         st.session_state.system_prompts = AVAILABLE_PROMPTS
-        st.session_state.selected_prompt = "Create Learning Material"
+        st.session_state.selected_prompt = "<empty prompt>"
         st.session_state.selected_model = AVAILABLE_MODELS[0]
         st.session_state.client = LLMClient()
-        st.session_state.client._set_system_prompt(SYS_LEARNING_MATERIAL)
+        st.session_state.client._set_system_prompt(AVAILABLE_PROMPTS["Short Answer"])
         st.session_state.rag_database_repo = ""
 
 
