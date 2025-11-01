@@ -11,7 +11,7 @@ from src.lib.prompts import (
     SYS_EMPTY_PROMPT,
     SYS_SHORT_ANSWER,
 )
-from src.openai_client import MODELS_GEMINI, MODELS_OPENAI, LLMClient
+from src.llm_client import MODELS_GEMINI, MODELS_OPENAI, LLMClient
 
 AVAILABLE_MODELS = []
 
