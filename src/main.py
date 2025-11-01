@@ -2,45 +2,7 @@ from __future__ import annotations
 import streamlit as st
 
 from src.codebase_tokenizer import render_chat_with_your_codebase, render_code_graph, render_codebase_tokenizer
-from src.lib.streamlit_helper import application_side_bar, apply_custom_style, init_session_state, render_messages
-
-
-def _chat_interface() -> None:
-    _, col_center, _ = st.columns([0.05, 0.9, 0.05])
-
-    with st.sidebar:
-        st.markdown("---")
-        with st.expander("Options", expanded=False):
-            if st.button("Reset History", key="reset_history_main"):
-                st.session_state.client.reset_history()
-            with st.expander("Store answer", expanded=True):
-                try:
-                    idx_input = st.text_input("Index of message to save", key="index_input_main")
-                    idx = int(idx_input) if idx_input.strip() else 0
-                except ValueError:
-                    st.error("Please enter a valid integer")
-                    idx = 0
-                filename = st.text_input("Filename", key="filename_input_main")
-                if st.button("Save to Markdown", key="save_to_md_main"):
-                    st.session_state.client.write_to_md(filename, idx)
-                    st.success(f"Chat history saved to {filename}")
-
-    with col_center:
-        st.subheader("Chat Interface")
-        st.markdown("---")
-        st.write("")  # Spacer
-        message_container = st.container()
-        render_messages(message_container)
-
-        with st._bottom:
-            prompt = st.chat_input("Send a message")
-
-        if prompt:
-            with st.chat_message("user"):
-                st.markdown(prompt)
-            with st.chat_message("assistant"):
-                st.session_state.client.chat(model=st.session_state.selected_model, user_message=prompt)
-                st.rerun()
+from src.lib.streamlit_helper import application_side_bar, apply_custom_style, chat_interface, init_session_state
 
 
 def main() -> None:
@@ -52,10 +14,10 @@ def main() -> None:
     init_session_state()
     application_side_bar()
 
-    chat_interface, work_in_progress = st.tabs(["Study Assistant", "Work in Progress"])
+    _chat_interface, work_in_progress = st.tabs(["Study Assistant", "Work in Progress"])
 
-    with chat_interface:
-        _chat_interface()
+    with _chat_interface:
+        chat_interface()
 
     with work_in_progress:
         tokenizer_tab, graph_tab, codebase_chat_tab = st.tabs(["Codebase Tokenizer", "Code Graph", "Chat With Your Codebase"])

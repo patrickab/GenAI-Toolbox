@@ -108,6 +108,43 @@ def application_side_bar() -> None:
     if model != st.session_state.selected_model:
         st.session_state.selected_model = model
 
+def chat_interface() -> None:
+    _, col_center, _ = st.columns([0.05, 0.9, 0.05])
+
+    with st.sidebar:
+        st.markdown("---")
+        with st.expander("Options", expanded=False):
+            if st.button("Reset History", key="reset_history_main"):
+                st.session_state.client.reset_history()
+            with st.expander("Store answer", expanded=True):
+                try:
+                    idx_input = st.text_input("Index of message to save", key="index_input_main")
+                    idx = int(idx_input) if idx_input.strip() else 0
+                except ValueError:
+                    st.error("Please enter a valid integer")
+                    idx = 0
+                filename = st.text_input("Filename", key="filename_input_main")
+                if st.button("Save to Markdown", key="save_to_md_main"):
+                    st.session_state.client.write_to_md(filename, idx)
+                    st.success(f"Chat history saved to {filename}")
+
+    with col_center:
+        st.subheader("Chat Interface")
+        st.markdown("---")
+        st.write("")  # Spacer
+        message_container = st.container()
+        render_messages(message_container)
+
+        with st._bottom:
+            prompt = st.chat_input("Send a message")
+
+        if prompt:
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            with st.chat_message("assistant"):
+                st.session_state.client.chat(model=st.session_state.selected_model, user_message=prompt)
+                st.rerun()
+
 
 def render_messages(message_container) -> None:  # noqa
     """Render chat messages from session state."""
