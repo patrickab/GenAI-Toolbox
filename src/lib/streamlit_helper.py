@@ -1,7 +1,9 @@
 """Streamlit helper functions."""
 
 import os
+import tempfile
 
+import pymupdf4llm
 import streamlit as st
 
 from src.lib.prompts import (
@@ -33,8 +35,10 @@ AVAILABLE_PROMPTS = {
     "<empty prompt>": SYS_EMPTY_PROMPT,
 }
 
+
 def init_session_state() -> None:
     if "client" not in st.session_state:
+        st.session_state.file_context = ""
         st.session_state.system_prompts = AVAILABLE_PROMPTS
         st.session_state.selected_prompt = "<empty prompt>"
         st.session_state.selected_model = AVAILABLE_MODELS[0]
@@ -72,6 +76,20 @@ def application_side_bar() -> None:
                 if st.button("Save to Markdown", key="save_to_md_main"):
                     st.session_state.client.write_to_md(filename, idx)
                     st.success(f"Chat history saved to {filename}")
+
+            file = st.file_uploader(type=["pdf", "py", "md", "cpp", "txt"], label="fileloader_sidbar")
+            if file is not None:
+
+                # Create temporary file - pymupdf4llm requires a file path but Streamlit's doesnt support that directly
+                with tempfile.TemporaryDirectory(delete=True) as tmpdir:
+
+                    # Preserve filename to allow correct naming of images extracted from PDFs (future proof)
+                    temp_file_path = os.path.join(tmpdir, file.name)
+                    with open(temp_file_path, "wb") as f:
+                        f.write(file.getvalue())
+                        text = pymupdf4llm.to_markdown(doc=f)
+
+                    st.session_state.file_context = text
 
     if sys_prompt_name != st.session_state.selected_prompt:
         st.session_state.client._set_system_prompt(st.session_state.system_prompts[sys_prompt_name])
