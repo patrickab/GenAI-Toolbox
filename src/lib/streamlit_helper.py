@@ -162,11 +162,12 @@ def pdf_workspace() -> None:
         st.subheader("Summary Article")
         st.info("To be implemented...")
     with col_learning_goals:
-        st.subheader("Learning Goals")
-        st.markdown(learning_goals if file is not None else "")
+        with st.expander("Learning Goals", expanded=True):
+            st.markdown(learning_goals if file is not None else "")
         st.markdown("---")
-        st.subheader("Original PDF")
-        st.pdf(file) if file is not None else None
+        with st.expander("Original PDF", expanded=False):
+            st.subheader("Original PDF")
+            st.pdf(file) if file is not None else None
 
 
 def render_messages(message_container) -> None:  # noqa
