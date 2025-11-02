@@ -56,16 +56,6 @@ def application_side_bar() -> None:
         key="prompt_select",
     )
 
-    if sys_prompt_name != st.session_state.selected_prompt:
-        st.session_state.client._set_system_prompt(st.session_state.system_prompts[sys_prompt_name])
-        st.session_state.selected_prompt = sys_prompt_name
-
-    if model != st.session_state.selected_model:
-        st.session_state.selected_model = model
-
-def chat_interface() -> None:
-    _, col_center, _ = st.columns([0.025, 0.95, 0.025])
-
     with st.sidebar:
         st.markdown("---")
         with st.expander("Options", expanded=False):
@@ -82,6 +72,16 @@ def chat_interface() -> None:
                 if st.button("Save to Markdown", key="save_to_md_main"):
                     st.session_state.client.write_to_md(filename, idx)
                     st.success(f"Chat history saved to {filename}")
+
+    if sys_prompt_name != st.session_state.selected_prompt:
+        st.session_state.client._set_system_prompt(st.session_state.system_prompts[sys_prompt_name])
+        st.session_state.selected_prompt = sys_prompt_name
+
+    if model != st.session_state.selected_model:
+        st.session_state.selected_model = model
+
+def chat_interface() -> None:
+    _, col_center, _ = st.columns([0.025, 0.95, 0.025])
 
     with col_center:
         st.header("Learning Assistant")
