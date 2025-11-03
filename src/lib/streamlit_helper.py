@@ -2,6 +2,7 @@
 
 import io
 import os
+import re
 import tempfile
 
 import fitz
@@ -68,7 +69,7 @@ def _extract_text_from_pdf(file: io.BytesIO) -> str:
 
         # Get the height of first page
         doc = fitz.open(temp_file_path)
-        doc_height = int(doc[0].rect.height * 1.1)  # Scale up for better visibility
+        doc_height = int(doc[0].rect.height * 1.5)  # Scale up for better visibility
 
     return text, doc_height
 
@@ -106,11 +107,9 @@ def application_side_bar() -> None:
 
 
 def chat_interface() -> None:
-    _, col_center, _ = st.columns([0.025, 0.95, 0.025])
+    col_left, _ = st.columns([0.9, 0.1])
 
-    with col_center:
-        st.header("Learning Assistant")
-        st.markdown("---")
+    with col_left:
         st.write("")  # Spacer
         message_container = st.container()
         render_messages(message_container)
@@ -196,16 +195,15 @@ def write_to_md(filename: str, message: str) -> None:
     with open(os.path.join("markdown", filename), "w", encoding="utf-8") as f:
         f.write(yaml_header + "\n" + message)
 
-
 def pdf_workspace() -> None:
     """PDF Workspace for extracting learning goals and summary articles."""
 
-    header, pdf_options = st.columns([0.66, 0.33])
-    with header:
-        st.header("PDF Workspace")
+    tab_pdf, tab_summary = st.tabs(["PDF Viewer/Uploader", "PDF Summary", ])
 
-    with pdf_options, st.expander("Options", expanded=False):
-        file = st.file_uploader("Upload PDF", type=["pdf"], key="pdf_workspace_uploader")
+    with tab_pdf:
+
+        with st.popover("Options"):
+            file = st.file_uploader("Upload PDF", type=["pdf"], key="pdf_workspace_uploader")
 
         if file is not None:
             pdf_text, pdf_height = _extract_text_from_pdf(file)
@@ -214,23 +212,31 @@ def pdf_workspace() -> None:
             # important_images = [img for img in image_importance if img["importance"] != "Low"]
             wiki_article = _write_wiki_article(learning_goals, important_images=[])
 
-    st.markdown(wiki_article if file is not None else "")
-    option_store_message(wiki_article, key_suffix="pdf_wiki_article") if file is not None else None
+            col_learning_goals, col_pdf = st.columns([0.5,0.5])
 
-    if file is not None:
-        st.markdown("---")
+            with col_learning_goals:
+                st.header("Learning Goals")
 
-        with st.sidebar.expander("Learning Goals", expanded=False):
-            st.header("Learning Goals")
-            st.markdown(learning_goals if file is not None else "")
-            option_store_message(learning_goals, key_suffix="pdf_learning_goals") if file is not None else None
+                if file is not None and learning_goals:
 
-        st.markdown("---")
+                    parts = re.split(r'(?m)^\#\s*(.*)\s*$', learning_goals)  # -> [before, h1, c1, h2, c2, ...]
+                    for title, content in zip(parts[1::2], parts[2::2], strict=True):
+                        if content == "\n": # Empty content = title of pdf without learning goals
+                            st.markdown(f"##{title.strip()}")
+                        else: # Actual learning goal section
+                            with st.expander(title.strip()):
+                                if content.strip():
+                                    st.markdown(content.strip()) # noqa
 
-        with st.sidebar.expander("PDF Details", expanded=True):
-            st.header("Original PDF")
-            st.pdf(file, height=pdf_height) if file is not None else None
+                option_store_message(learning_goals, key_suffix="pdf_learning_goals") if file is not None else None
 
+            with col_pdf:
+                st.header("Original PDF")
+                st.pdf(file, height=pdf_height) if file is not None else None
+
+    with tab_summary:
+        st.markdown(wiki_article if file is not None else "")
+        option_store_message(wiki_article, key_suffix="pdf_wiki_article") if file is not None else None
 
 def option_store_message(message: str, key_suffix: str) -> None:
     """Uses st.popover for a less intrusive save option."""
