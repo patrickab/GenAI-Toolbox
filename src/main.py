@@ -11,12 +11,12 @@ def main() -> None:
     init_session_state()
     application_side_bar()
 
-    tab_pdf ,tab_chat= st.tabs(["Study Assistant", "PDF Workspace"])
+    tab_chat, tab_pdf = st.tabs(["Study Assistant", "PDF Workspace"])
 
-    with tab_pdf:
-        pdf_workspace()
     with tab_chat:
         chat_interface()
+    with tab_pdf:
+        pdf_workspace()
 
 if __name__ == "__main__":
     main()

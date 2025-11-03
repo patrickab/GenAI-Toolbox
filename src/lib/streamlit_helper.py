@@ -4,9 +4,11 @@ import io
 import os
 import tempfile
 
+import fitz
 import pymupdf4llm
 import streamlit as st
 
+from src.lib.non_user_prompts import SYS_IMAGE_IMPORTANCE
 from src.lib.prompts import (
     SYS_ARTICLE,
     SYS_CONCEPT_IN_DEPTH,
@@ -55,14 +57,17 @@ def _extract_text_from_pdf(file: io.BytesIO) -> str:
     """Extract text from uploaded PDF file using pymupdf4llm."""
     # Create temporary file - pymupdf4llm requires a file path but Streamlit's doesnt support that directly
     with tempfile.TemporaryDirectory(delete=True) as tmpdir:
-
         # Preserve filename to allow correct naming of images extracted from PDFs (future proof)
         temp_file_path = os.path.join(tmpdir, file.name)
         with open(temp_file_path, "wb") as f:
             f.write(file.getvalue())
             text = pymupdf4llm.to_markdown(doc=f, write_images=True)
 
-    return text
+        # Get the height of first page
+        doc = fitz.open(temp_file_path)
+        doc_height = int(doc[0].rect.height * 1.1) # Scale up for better visibility
+
+    return text, doc_height
 
 
 def application_side_bar() -> None:
@@ -107,6 +112,7 @@ def application_side_bar() -> None:
     if model != st.session_state.selected_model:
         st.session_state.selected_model = model
 
+
 def chat_interface() -> None:
     _, col_center, _ = st.columns([0.025, 0.95, 0.025])
 
@@ -128,25 +134,56 @@ def chat_interface() -> None:
                 st.write_stream(st.session_state.client.chat(model=st.session_state.selected_model, user_message=prompt))
                 st.rerun()
 
-@st.cache_data
-def extract_learning_goals(text: str) -> str:
-    stream = st.session_state.client.api_query(
-        model="gemini-2.5-flash-lite",
-        user_message=text,
-        system_prompt=SYS_PDF_TO_LEARNING_GOALS,
-        chat_history=None
-    )
-    pdf_learning_goals = ""
-    for chunk in stream:
-        pdf_learning_goals += chunk
 
-    return pdf_learning_goals
+def _handle_text_stream(model: str, prompt: str, system_prompt: str) -> str:
+    stream = st.session_state.client.api_query(model=model, user_message=prompt, system_prompt=system_prompt, chat_history=None)
+    response_text = ""
+    for chunk in stream:
+        response_text += chunk
+
+    return response_text
+
+
+@st.cache_data
+def _extract_learning_goals(text: str) -> str:
+    """Extract learning goals from PDF text."""
+    print("Extracting learning goals...")
+    return _handle_text_stream(model="gemini-2.5-pro", prompt=text, system_prompt=SYS_PDF_TO_LEARNING_GOALS)
+
+
+@st.cache_data
+def _extract_image_importance(pdf_text: str, learning_goals: str) -> str:
+    """Extract image importance from PDF text and learning goals."""
+    print("Extracting image importance...")
+    response = _handle_text_stream(
+        model="gemini-2.5-flash",
+        prompt="## Learning Goals\n" + learning_goals + "\n\n## PDF Content\n" + pdf_text,
+        system_prompt=SYS_IMAGE_IMPORTANCE,
+    )
+    return response
+
+
+@st.cache_data
+def _write_wiki_article(learning_goals: str, important_images: list) -> str: # noqa
+    wiki_prompt = f"""Write an in-depth article
+    based on the following learning goals {learning_goals}.
+    Instead of simply solving tasks & answering questions, guide the reader towards a deep understanding of the underlying concepts.
+    """
+    #You can reference the following images using markdown notation
+    #Just write the provided image name without link to localhost.
+    #![](image_name.png)
+
+    #Do so only for images 
+    #{important_images}.
+
+    print("Writing wiki article...")
+    return _handle_text_stream(model="gemini-2.5-pro", prompt=wiki_prompt, system_prompt=SYS_ARTICLE)
 
 
 def pdf_workspace() -> None:
     """PDF Workspace for extracting learning goals and summary articles."""
 
-    header, pdf_options = st.columns([0.8, 0.2])
+    header, pdf_options = st.columns([0.66, 0.33])
     with header:
         st.header("PDF Workspace")
 
@@ -154,20 +191,28 @@ def pdf_workspace() -> None:
         file = st.file_uploader("Upload PDF", type=["pdf"], key="pdf_workspace_uploader")
 
         if file is not None:
-            pdf_text = _extract_text_from_pdf(file)
-            learning_goals = extract_learning_goals(pdf_text)
+            pdf_text, pdf_height = _extract_text_from_pdf(file)
+            learning_goals = _extract_learning_goals(pdf_text)
+            # image_importance = json.loads(_extract_image_importance(pdf_text, learning_goals))
+            # important_images = [img for img in image_importance if img["importance"] != "Low"]
+            wiki_article = _write_wiki_article(learning_goals, important_images=[])
 
-    col_summary_article, col_learning_goals = st.columns([0.618, 0.382])
-    with col_summary_article:
-        st.subheader("Summary Article")
-        st.info("To be implemented...")
-    with col_learning_goals:
-        with st.expander("Learning Goals", expanded=True):
-            st.markdown(learning_goals if file is not None else "")
+    st.markdown(wiki_article if file is not None else "")
+
+    if file is not None:
+
         st.markdown("---")
-        with st.expander("Original PDF", expanded=False):
-            st.subheader("Original PDF")
-            st.pdf(file) if file is not None else None
+
+        with st.sidebar.expander("Learning Goals", expanded=False):
+            st.header("Learning Goals")
+            st.markdown(learning_goals if file is not None else "")
+
+        st.markdown("---")
+
+        with st.sidebar.expander("PDF Details", expanded=True):
+            st.header("Original PDF")
+            st.pdf(file, height=pdf_height) if file is not None else None
+
 
 
 def render_messages(message_container) -> None:  # noqa

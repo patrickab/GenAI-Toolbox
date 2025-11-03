@@ -188,7 +188,10 @@ SYS_PDF_TO_LEARNING_GOALS = f"""
     Focus on exam-relevant, understanding/application-oriented ideas.
     Ignore redundant, decorative, procedural, or low-relevance details.
     Create an extensive list of learning goals for all exam-relevant topics.
-    Incorporate Blooms taxonomy tags (*remember, understand, apply, analyze, evaluate, create*) for each learning goal to guide tone, depth, and progression.
+
+    **Bloom tags**
+    Include one Bloom tag to each learning goal from: (remember, understand, apply, analyze, evaluate, create).
+    Use tags to control cognitive depth.
 
     **Format**:
     Comprehensive list of learning goals, as hierarchical list of markdown checkboxes - [ ]
@@ -204,12 +207,11 @@ SYS_PDF_TO_LEARNING_GOALS = f"""
     - [ ] (apply) Learning goal
         - [ ] (analyze) Sub-learning goal
         - [ ] (evaluate) Sub-learning goal
+    - [ ] (remember) Sub-learning goal
     ## **Chapter**
-    - [ ] (remember) Learning goal
-    - [ ] (create) Learning goal
+    - [ ] (understand) Learning goal
+        - [ ] (remember) Sub-learning goal
         - [ ] (apply) Sub-learning goal
-    - [ ] (understand) Sub-learning goal
-
 """
 
 SYS_EMPTY_PROMPT = ""
