@@ -23,13 +23,21 @@ SYS_IMAGE_IMPORTANCE = """
 """
 
 SYS_NOTE_TO_OBSIDIAN_YAML = """
-  Your task is to take a user's notes and convert them into a structured YAML format that can be used in Obsidian.
+  Your task is to take a user's notes and convert them into a structured YAML format suitable for Obsidian.
+
+  # **Instructions**:
+  - **Aliases**: Include common synonyms, abbreviations, alternative phrasings.
+  - **Tags**: Include 1-5 general topic keywords. When selecting tags, prioritize consistency:
+      - Use tags that notes on related topics would likely have.
+      - Avoid overly specific or unique tags that dont help cluster notes.
+  - **Summary**: Concise, one-line summary suitable for hover preview or search.
+  - **Format**: Return a **raw YAML header** only. Do not include backticks, code fences, or extra formatting.
 
   **Output format**:
     ---
     title: {{file_name_no_ext}}
-    aliases: [{{file_name_no_ext}}, <abbreviation>, <synonym>, <...>, <synonym>] # 1–4 alternate names - dont force aliases if not applicable
-    tags: [concept, <domain_1>, ..., <domain_n>]           # 2–6 relevant keywords - dont force tags if not applicable
-    summary: ""   # One-line description (for search or hover preview)
+    aliases: [abbreviation, synonym_1, <...>, synonym_n] # 1–4 alternate names
+    tags: [domain_1, ..., domain_n] # 1-6 related keywords
+    summary: ""
     ---
 """

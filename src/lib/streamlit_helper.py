@@ -8,7 +8,7 @@ import fitz
 import pymupdf4llm
 import streamlit as st
 
-from src.lib.non_user_prompts import SYS_IMAGE_IMPORTANCE
+from src.lib.non_user_prompts import SYS_IMAGE_IMPORTANCE, SYS_NOTE_TO_OBSIDIAN_YAML
 from src.lib.prompts import (
     SYS_ARTICLE,
     SYS_CONCEPT_IN_DEPTH,
@@ -19,7 +19,7 @@ from src.lib.prompts import (
     SYS_PROMPT_ARCHITECT,
     SYS_SHORT_ANSWER,
 )
-from src.llm_client import MODELS_GEMINI, MODELS_OPENAI, LLMClient
+from src.llm_client import MACROTASK_MODEL, MICROTASK_MODEL, MODELS_GEMINI, MODELS_OPENAI, OBSIDIAN_VAULT, LLMClient
 
 AVAILABLE_MODELS = []
 
@@ -36,7 +36,6 @@ AVAILABLE_PROMPTS = {
     "Concept - Article": SYS_ARTICLE,
     "Prompt Architect": SYS_PROMPT_ARCHITECT,
     "Precise Task Execution": SYS_PRECISE_TASK_EXECUTION,
-    "PDF to Learning Goals": SYS_PDF_TO_LEARNING_GOALS,
     "<empty prompt>": SYS_EMPTY_PROMPT,
 }
 
@@ -65,7 +64,7 @@ def _extract_text_from_pdf(file: io.BytesIO) -> str:
 
         # Get the height of first page
         doc = fitz.open(temp_file_path)
-        doc_height = int(doc[0].rect.height * 1.1) # Scale up for better visibility
+        doc_height = int(doc[0].rect.height * 1.1)  # Scale up for better visibility
 
     return text, doc_height
 
@@ -124,7 +123,11 @@ def chat_interface() -> None:
                 st.rerun()
 
 
-def _handle_text_stream(model: str, prompt: str, system_prompt: str) -> str:
+def _non_streaming_api_query(model: str, prompt: str, system_prompt: str) -> str:
+    """
+    Converts streaming response generator to generic string.
+    Required for @st.cache_data compatibility.
+    """
     stream = st.session_state.client.api_query(model=model, user_message=prompt, system_prompt=system_prompt, chat_history=None)
     response_text = ""
     for chunk in stream:
@@ -137,15 +140,15 @@ def _handle_text_stream(model: str, prompt: str, system_prompt: str) -> str:
 def _extract_learning_goals(text: str) -> str:
     """Extract learning goals from PDF text."""
     print("Extracting learning goals...")
-    return _handle_text_stream(model="gemini-2.5-pro", prompt=text, system_prompt=SYS_PDF_TO_LEARNING_GOALS)
+    return _non_streaming_api_query(model=MACROTASK_MODEL, prompt=text, system_prompt=SYS_PDF_TO_LEARNING_GOALS)
 
 
 @st.cache_data
 def _extract_image_importance(pdf_text: str, learning_goals: str) -> str:
     """Extract image importance from PDF text and learning goals."""
     print("Extracting image importance...")
-    response = _handle_text_stream(
-        model="gemini-2.5-flash",
+    response = _non_streaming_api_query(
+        model=MICROTASK_MODEL,
         prompt="## Learning Goals\n" + learning_goals + "\n\n## PDF Content\n" + pdf_text,
         system_prompt=SYS_IMAGE_IMPORTANCE,
     )
@@ -153,22 +156,41 @@ def _extract_image_importance(pdf_text: str, learning_goals: str) -> str:
 
 
 @st.cache_data
-def _write_wiki_article(learning_goals: str, important_images: list) -> str: # noqa
+def _write_wiki_article(learning_goals: str, important_images: list) -> str:  # noqa
     wiki_prompt = f"""Write an in-depth article
     based on the following learning goals {learning_goals}.
     Instead of simply solving tasks & answering questions, guide the reader towards a deep understanding of the underlying concepts.
 
     **Depth adaptation**: scale explanation length and detail to the provided bloom tags.
     """
-    #You can reference the following images using markdown notation
-    #Just write the provided image name without link to localhost.
+    # You can reference the following images using markdown notation
+    # Just write the provided image name without link to localhost.
     #![](image_name.png)
-
-    #Do so only for images 
-    #{important_images}.
-
+    # Do so only for images
+    # {important_images}.
     print("Writing wiki article...")
-    return _handle_text_stream(model="gemini-2.5-pro", prompt=wiki_prompt, system_prompt=SYS_ARTICLE)
+    return _non_streaming_api_query(model=MACROTASK_MODEL, prompt=wiki_prompt, system_prompt=SYS_ARTICLE)
+
+
+def write_to_md(filename: str, message: str) -> None:
+    """Write an assistant response to .md (idx: 0 = most recent)."""
+    if not filename.endswith(".md"):
+        filename += ".md"
+
+    sys_prompt = SYS_NOTE_TO_OBSIDIAN_YAML.replace("{{file_name_no_ext}}", filename.split(".md")[0])
+    yaml_header = _non_streaming_api_query(
+        model="gemini-2.5-flash",
+        prompt=message,
+        system_prompt=sys_prompt.replace("{{user_notes}}", message),
+    )
+
+    file_path = os.path.join(OBSIDIAN_VAULT, filename)
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(yaml_header + "\n" + message)
+
+    os.makedirs("markdown", exist_ok=True)
+    with open(os.path.join("markdown", filename), "w", encoding="utf-8") as f:
+        f.write(yaml_header + "\n" + message)
 
 
 def pdf_workspace() -> None:
@@ -189,14 +211,15 @@ def pdf_workspace() -> None:
             wiki_article = _write_wiki_article(learning_goals, important_images=[])
 
     st.markdown(wiki_article if file is not None else "")
+    option_store_message(wiki_article, key_suffix="pdf_wiki_article") if file is not None else None
 
     if file is not None:
-
         st.markdown("---")
 
         with st.sidebar.expander("Learning Goals", expanded=False):
             st.header("Learning Goals")
             st.markdown(learning_goals if file is not None else "")
+            option_store_message(learning_goals, key_suffix="pdf_learning_goals") if file is not None else None
 
         st.markdown("---")
 
@@ -204,14 +227,16 @@ def pdf_workspace() -> None:
             st.header("Original PDF")
             st.pdf(file, height=pdf_height) if file is not None else None
 
+
 def option_store_message(message: str, key_suffix: str) -> None:
     """Uses st.popover for a less intrusive save option."""
     with st.popover("Store answer"):
         # Use the key_suffix to ensure widget keys are unique
         filename = st.text_input("Filename", key=f"filename_input_{key_suffix}")
         if st.button("Save to Markdown", key=f"save_to_md_{key_suffix}"):
-            st.session_state.client.write_to_md(filename, message)
+            write_to_md(filename=filename, message=message)
             st.success(f"Answer saved to {filename}")
+
 
 def render_messages(message_container) -> None:  # noqa
     """Render chat messages from session state."""
@@ -234,4 +259,4 @@ def render_messages(message_container) -> None:  # noqa
                 # Display user and assistant messages
                 st.chat_message("user").markdown(user_msg)
                 st.chat_message("assistant").markdown(assistant_msg)
-                option_store_message(assistant_msg, key_suffix=f"{i//2}")
+                option_store_message(assistant_msg, key_suffix=f"{i // 2}")
