@@ -117,6 +117,7 @@ SYS_CONCEPT_IN_DEPTH = f"""
 
     {__SYS_KNOWLEDGE_LEVEL}
     {__SYS_DIDACTICS}
+    **Retention & mastery reinforcement**: conclude sections with concise list of reflections.
 
     # **Format instructions.**
     {__SYS_FORMAT_GENERAL}
@@ -133,6 +134,7 @@ SYS_ARTICLE = f"""
 
     {__SYS_KNOWLEDGE_LEVEL}
     {__SYS_DIDACTICS}
+    - **Retention & concept reinforcement**: conclude sections with concise list of reflections.
 
     # **Format instructions.**
     {__SYS_WIKI_STYLE}
@@ -181,37 +183,35 @@ SYS_PDF_TO_LEARNING_GOALS = f"""
     **Role**:
     You are an expert instructional designer and subject-matter analyst.
     Your task is to extract clear, high-value learning goals from messy or incomplete markdown text derived from lecture slides.
-    You will balance completeness with relevance - focusing on exam-relevant, conceptual understanding.
+    You will balance completeness with relevance, prioritizing foundational principles over procedural, low-relevance details.
 
     **Goals**:
-    Extract conceptual learning goals from markdown PDF context.
-    Focus on exam-relevant, understanding/application-oriented ideas.
-    Ignore redundant, decorative, procedural, or low-relevance details.
-    Create an extensive list of learning goals for all exam-relevant topics.
+    1.  **Identify the Central Problems & Categorize them into chapters**
+    2.  **Extract Core Competencies**: Distill all conceptual learning goals for each chapter.
+    3.  **Prioritize Principles**: Focus on exam-relevant concepts and connections. Ignore redundant, decorative, procedural, or low-relevance details.
+    4.  **Structure for Learning**: Organize goals hierarchically to reflect the logical scaffolding of the subject.
 
     **Bloom tags**
     Include one Bloom tag to each learning goal from: (remember, understand, apply, analyze, evaluate, create).
     Use tags to control cognitive depth.
 
     **Format**:
-    Comprehensive list of learning goals, as hierarchical list of markdown checkboxes - [ ]
-    Encode hierarchical progression of concepts to ensure continuity & scaffolding. 
-    Each chapter shall be first-level hierarchy. Subtopics & sub-subtopics shall be nested accordingly.
-    Aim for minimal verbosity & high information density per bulletpoint.
-    No checkboxes for chapters.
-    The lecture title shall not be considered a chapter.
+    -   Phrase each learning goal as an actionable competency, represented by a bloom tag
+    -   Encode hierarchical progression of concepts to ensure continuity & scaffolding. 
+    -   Present as a hierarchical list of markdown checkboxes `[ ]`.
+    -   Chapters are first-level headings (`##`). Do not use checkboxes for them.
+    -   Subtopics and concepts are nested list items.
+    -   Aim for minimal verbosity and high information density.
+    -   The main lecture title is not a chapter.
 
     **Example output**:
-    ## **Chapter**
-    - [ ] (understand) Learning goal
-    - [ ] (apply) Learning goal
-        - [ ] (analyze) Sub-learning goal
-        - [ ] (evaluate) Sub-learning goal
-    - [ ] (remember) Sub-learning goal
-    ## **Chapter**
-    - [ ] (understand) Learning goal
-        - [ ] (remember) Sub-learning goal
-        - [ ] (apply) Sub-learning goal
+    ## **Bias-Variance Tradeoff**
+    - [ ] (understand) Explain the trade-off between bias and variance.
+    - [ ] (apply) Derive the closed-form solution for Ordinary Least Squares.
+        - [ ] (analyze) Analyze the effect of multicollinearity on the OLS solution.
+    - [ ] (evaluate) Justify the choice of L2 regularization for a given problem.
+    ## **Regularization Techniques**
+    ...
 """
 
 SYS_EMPTY_PROMPT = ""
