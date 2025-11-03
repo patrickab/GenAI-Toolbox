@@ -9,6 +9,7 @@ The sidebar allows you to select pre-defined system prompts and swap models on t
 - Clean markdown/LaTeX formatting.
 - Adjust the length, complexity of the answer.
 - LLM responses with table of contents incl. links to response sections
+- Support for all [Ollama](https://ollama.com/search) open-source models
 - Support for Gemini API & OpenAI API (easily extendable to any API)
 - Manage your own prompt library & flexibly adjust chatbot behavior as you talk.
 - Store responses from the website directly in your [Obsidian](https://obsidian.com) vault
@@ -28,4 +29,5 @@ The image below shows response behavior for **the same input** with different **
 - Explore repositories visually and enrich your LLM-queries with context-aware code snippets by using Retrieval Augmented Generation (RAG).
 - Keep your conversations tidy with a compact, expandable history
 - Flexibly finetune LLM-behavior for brainstorming, generation of markdown learning material (markdown & Jupyter notebook) & explanations directly in your browser.
+
 
