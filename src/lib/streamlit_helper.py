@@ -10,8 +10,8 @@ import tempfile
 import fitz
 import pandas as pd
 import pymupdf4llm
-import streamlit as st
 from st_copy import copy_button
+import streamlit as st
 
 from src.config import MACROTASK_MODEL, MICROTASK_MODEL, MODELS_GEMINI, MODELS_OLLAMA, MODELS_OPENAI, NANOTASK_MODEL, OBSIDIAN_VAULT
 from src.lib.flashcards import DATE_ADDED, NEXT_APPEARANCE, render_flashcards
@@ -24,7 +24,7 @@ from src.lib.prompts import (
     SYS_PDF_TO_LEARNING_GOALS,
     SYS_PRECISE_TASK_EXECUTION,
     SYS_PROMPT_ARCHITECT,
-    SYS_SHORT_ANSWER,
+    SYS_QUICK_OVERVIEW,
 )
 from src.llm_client import LLMClient
 
@@ -40,7 +40,7 @@ if MODELS_OLLAMA != []:
     AVAILABLE_MODELS += MODELS_OLLAMA
 
 AVAILABLE_PROMPTS = {
-    "Short Answer": SYS_SHORT_ANSWER,
+    "Quick Overview": SYS_QUICK_OVERVIEW,
     "Concept - High-Level": SYS_CONCEPTUAL_OVERVIEW,
     "Concept - In-Depth": SYS_CONCEPT_IN_DEPTH,
     "Concept - Article": SYS_ARTICLE,
@@ -57,7 +57,7 @@ def init_session_state() -> None:
         st.session_state.selected_prompt = "<empty prompt>"
         st.session_state.selected_model = AVAILABLE_MODELS[0]
         st.session_state.client = LLMClient()
-        st.session_state.client._set_system_prompt(AVAILABLE_PROMPTS["Short Answer"])
+        st.session_state.client._set_system_prompt(next(iter(st.session_state.system_prompts.values()))) # set to first prompt
         st.session_state.rag_database_repo = ""
 
 

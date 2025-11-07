@@ -81,7 +81,7 @@ __SYS_WIKI_STYLE = f"""
 
 """
 
-SYS_SHORT_ANSWER = f"""
+SYS_QUICK_OVERVIEW = f"""
     **Role**
     You are an expert science communicator who provides **ultra-short conceptual answers** to complex scientific topics.
 
