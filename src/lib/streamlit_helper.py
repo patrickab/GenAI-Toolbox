@@ -11,6 +11,7 @@ import fitz
 import pandas as pd
 import pymupdf4llm
 import streamlit as st
+from st_copy import copy_button
 
 from src.config import MACROTASK_MODEL, MICROTASK_MODEL, MODELS_GEMINI, MODELS_OLLAMA, MODELS_OPENAI, NANOTASK_MODEL, OBSIDIAN_VAULT
 from src.lib.flashcards import DATE_ADDED, NEXT_APPEARANCE, render_flashcards
@@ -304,6 +305,12 @@ def render_messages(message_container) -> None:  # noqa
 
             with st.expander(label=label, expanded=is_expanded):
                 # Display user and assistant messages
-                st.chat_message("user").markdown(user_msg)
-                st.chat_message("assistant").markdown(assistant_msg)
+                with st.chat_message("user"):
+                    st.markdown(user_msg)
+                    copy_button(user_msg)
+
+                with st.chat_message("assistant"):
+                    st.markdown(assistant_msg)
+                    copy_button(assistant_msg)
+
                 option_store_message(assistant_msg, key_suffix=f"{i // 2}")
