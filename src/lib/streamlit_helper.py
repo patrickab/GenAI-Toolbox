@@ -314,3 +314,39 @@ def render_messages(message_container) -> None:  # noqa
                     copy_button(assistant_msg)
 
                 option_store_message(assistant_msg, key_suffix=f"{i // 2}")
+
+def apply_custom_css() -> None:
+    """Apply custom CSS styles to Streamlit app."""
+    st.markdown(
+        """
+        <style>
+        /* Overall app background and text color with Times New Roman */
+        .stApp {
+            font-family: 'Times New Roman', serif;
+        }
+
+        /* Code, pre, and LaTeX math uses Roboto Mono with default coloring */
+        code {
+            font-family: 'Cascadia Code', monospace;
+            background-color: #1e1e1e; /* subtle dark block background */
+            padding: 4px 6px;
+            border-radius: 6px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-word;
+            user-select: text;
+        }
+
+        pre code {
+            color: "#ff00ff";
+        }
+
+        /* Box shadow for code blocks */
+        pre {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
