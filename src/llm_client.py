@@ -1,3 +1,4 @@
+import csv
 import os
 from typing import Iterator, List, Optional, Tuple
 
@@ -34,6 +35,22 @@ class LLMClient:
 
     def _set_system_prompt(self, system_prompt: str) -> None:
         self.sys_prompt = system_prompt
+
+    def store_history(self, filename: str) -> None:
+        """Store message history to filesytem."""
+        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['role', 'message'])
+            writer.writerows(self.messages)
+
+    def load_history(self, filename: str) -> None:
+        """Load message history from filesystem."""
+        if not os.path.exists(filename):
+            return
+
+        with open(filename, 'r', newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            self.messages = [(row['role'], row['message']) for row in reader]
 
     def reset_history(self) -> None:
         """Reset the chat history."""

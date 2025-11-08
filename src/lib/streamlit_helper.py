@@ -13,7 +13,16 @@ import pymupdf4llm
 from st_copy import copy_button
 import streamlit as st
 
-from src.config import MACROTASK_MODEL, MICROTASK_MODEL, MODELS_GEMINI, MODELS_OLLAMA, MODELS_OPENAI, NANOTASK_MODEL, OBSIDIAN_VAULT
+from src.config import (
+    CHAT_HISTORY_FOLDER,
+    MACROTASK_MODEL,
+    MICROTASK_MODEL,
+    MODELS_GEMINI,
+    MODELS_OLLAMA,
+    MODELS_OPENAI,
+    NANOTASK_MODEL,
+    OBSIDIAN_VAULT,
+)
 from src.lib.flashcards import DATE_ADDED, NEXT_APPEARANCE, render_flashcards
 from src.lib.non_user_prompts import (
     SYS_IMAGE_IMPORTANCE,
@@ -109,6 +118,44 @@ def application_side_bar() -> None:
             if file is not None:
                 text = _extract_text_from_pdf(file)
                 st.session_state.file_context = text
+
+            if st.session_state.client.messages != []:
+                st.markdown("---")
+                with st.popover("Save History"):
+                    filename = st.text_input("Filename", key="history_filename_input")
+                    if st.button("Save Chat History", key="save_chat_history_button"):
+                        if not os.path.exists(CHAT_HISTORY_FOLDER):
+                            os.makedirs(CHAT_HISTORY_FOLDER)
+                        st.session_state.client.store_history(CHAT_HISTORY_FOLDER + '/' + filename + '.csv')
+                        st.success("Successfully saved chat")
+
+        if os.path.exists(CHAT_HISTORY_FOLDER):
+            chat_histories = [f.replace('.csv', '') for f in os.listdir(CHAT_HISTORY_FOLDER) if f.endswith('.csv')]
+        else:
+            chat_histories = []
+        
+        if chat_histories != []:
+            st.markdown("---")
+            with st.expander("Chat Histories", expanded=False):
+                for history in chat_histories:
+                    with st.expander(history, expanded=False):
+                        col_load, col_delete, col_archive = st.columns(3)
+                        with col_load:
+                            if st.button("🔄", key=f"load_{history}"):
+                                st.session_state.client.load_history(os.path.join(CHAT_HISTORY_FOLDER, history + '.csv'))
+                        with col_delete:
+                            if st.button("🗑️", key=f"delete_{history}"):
+                                os.remove(os.path.join(CHAT_HISTORY_FOLDER, history + '.csv'))
+                                st.rerun()
+                        with col_archive:
+                            if st.button("📁", key=f"archive_{history}"):
+                                if not os.path.exists(CHAT_HISTORY_FOLDER + '/archived/'):
+                                    os.makedirs(CHAT_HISTORY_FOLDER + '/archived/')
+                                os.rename(
+                                    os.path.join(CHAT_HISTORY_FOLDER, history + '.csv'),
+                                    os.path.join(CHAT_HISTORY_FOLDER, 'archived', history + '.csv')
+                                )
+                                st.rerun()
 
     if sys_prompt_name != st.session_state.selected_prompt:
         st.session_state.client._set_system_prompt(st.session_state.system_prompts[sys_prompt_name])
