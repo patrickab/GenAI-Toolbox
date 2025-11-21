@@ -1,42 +1,25 @@
 """Streamlit helper functions."""
 
-from datetime import datetime
 import io
-import json
 import os
-import re
 import tempfile
 
 import fitz
-import pandas as pd
 import pymupdf4llm
-from rag_database.rag_database import RagDatabase, RAGQuery
 from st_copy import copy_button
 import streamlit as st
 from streamlit_paste_button import PasteResult, paste_image_button
 
 from src.config import (
     CHAT_HISTORY_FOLDER,
-    LOCAL_NANOTASK_MODEL,
-    MACROTASK_MODEL,
-    MICROTASK_MODEL,
+    EMBEDDING_MODELS,
     MODELS_GEMINI,
     MODELS_OLLAMA,
     MODELS_OPENAI,
     NANOTASK_MODEL,
-    OBSIDIAN_RAG,
     OBSIDIAN_VAULT,
-    RAG_K_DOCS,
 )
-from src.lib.flashcards import DATE_ADDED, NEXT_APPEARANCE, render_flashcards
-from src.lib.non_user_prompts import (
-    SYS_CAPTION_GENERATOR,
-    SYS_IMAGE_IMPORTANCE,
-    SYS_LEARNINGGOALS_TO_FLASHCARDS,
-    SYS_NOTE_TO_OBSIDIAN_YAML,
-    SYS_PDF_TO_ARTICLE,
-    SYS_PDF_TO_LEARNING_GOALS,
-)
+from src.lib.non_user_prompts import SYS_NOTE_TO_OBSIDIAN_YAML
 from src.lib.prompts import (
     SYS_AI_TUTOR,
     SYS_ARTICLE,
@@ -49,16 +32,17 @@ from src.lib.prompts import (
 )
 from src.llm_client import LLMClient
 
-AVAILABLE_MODELS = []
+AVAILABLE_LLM_MODELS = []
 
 if os.getenv("GEMINI_API_KEY"):
-    AVAILABLE_MODELS += MODELS_GEMINI
+    AVAILABLE_LLM_MODELS += MODELS_GEMINI
 
 if os.getenv("OPENAI_API_KEY"):
-    AVAILABLE_MODELS += MODELS_OPENAI
+    AVAILABLE_LLM_MODELS += MODELS_OPENAI
 
 if MODELS_OLLAMA != []:
-    AVAILABLE_MODELS += MODELS_OLLAMA
+    AVAILABLE_LLM_MODELS += MODELS_OLLAMA
+    AVAILABLE_LLM_MODELS = [model for model in AVAILABLE_LLM_MODELS if model not in EMBEDDING_MODELS]
 
 AVAILABLE_PROMPTS = {
     "Quick Overview": SYS_QUICK_OVERVIEW,
@@ -73,33 +57,48 @@ AVAILABLE_PROMPTS = {
 
 
 def init_session_state() -> None:
+    """Initialize session state variables. Called within main directly after startup."""
     if "client" not in st.session_state:
-        st.session_state.file_context = ""
-        st.session_state.system_prompts = AVAILABLE_PROMPTS
-        st.session_state.selected_prompt = "<empty prompt>"
-        st.session_state.selected_model = AVAILABLE_MODELS[0]
         st.session_state.client = LLMClient()
-        st.session_state.client._set_system_prompt(next(iter(st.session_state.system_prompts.values()))) # set to first prompt
-        st.session_state.rag_database_repo = ""
+
+def init_chat_variables() -> None:
+    """Initialize session state variables for chat."""
+    if "system_prompts" not in st.session_state:
+        st.session_state.file_context = ""
+        st.session_state.selected_model = AVAILABLE_LLM_MODELS[0]
+        st.session_state.selected_prompt = next(iter(AVAILABLE_PROMPTS.keys()))
+        st.session_state.system_prompts = AVAILABLE_PROMPTS
         st.session_state.pasted_image = PasteResult(image_data=None)
-        st.session_state.last_sent_image = PasteResult(image_data=None)
+        st.session_state.imgs_sent = [PasteResult(image_data=None)]
         st.session_state.usr_msg_captions = []
+        st.session_state.client = LLMClient()
 
-
-def application_side_bar() -> None:
-    model = st.sidebar.selectbox(
-        "Model",
-        AVAILABLE_MODELS,
-        key="model_select",
-    )
-
-    sys_prompt_name = st.sidebar.selectbox(
-        "System prompt",
-        list(st.session_state.system_prompts.keys()),
-        key="prompt_select",
-    )
+def default_sidebar_chat() -> None:
+    """Render the default sidebar for chat applications."""
+    init_chat_variables()
 
     with st.sidebar:
+
+        model = st.selectbox(
+            "Select LLM",
+            AVAILABLE_LLM_MODELS,
+            key="model_select",
+        )
+
+        sys_prompt_name = st.selectbox(
+            "System prompt",
+            list(st.session_state.system_prompts.keys()),
+            key="prompt_select",
+        )
+
+        if sys_prompt_name != st.session_state.selected_prompt:
+            st.session_state.client._set_system_prompt(st.session_state.system_prompts[sys_prompt_name])
+            st.session_state.selected_prompt = sys_prompt_name
+
+        if model != st.session_state.selected_model:
+            st.session_state.selected_model = model
+
+        # -------------------------------------------------- Options & File Upload -------------------------------------------------- #
         st.markdown("---")
         with st.expander("Options", expanded=False):
             st.session_state.bool_caption_usr_msg = st.toggle("Caption User Messages", key="caption_toggle", value=False)
@@ -126,6 +125,7 @@ def application_side_bar() -> None:
                         st.session_state.client.store_history(CHAT_HISTORY_FOLDER + '/' + filename + '.csv')
                         st.success("Successfully saved chat")
 
+        # ---------------------------------------------- Image Paste & Chat Histories ---------------------------------------------- #
         st.markdown("---")
         with st.expander("Upload Image"):
             # check wether streamlit background is in dark mode or light mode
@@ -180,232 +180,6 @@ def application_side_bar() -> None:
                                 )
                                 st.rerun()
 
-    if sys_prompt_name != st.session_state.selected_prompt:
-        st.session_state.client._set_system_prompt(st.session_state.system_prompts[sys_prompt_name])
-        st.session_state.selected_prompt = sys_prompt_name
-
-    if model != st.session_state.selected_model:
-        st.session_state.selected_model = model
-
-
-# ---------------------------------------------------- Chat Interface functions ---------------------------------------------------- #
-def chat_interface() -> None:
-    col_left, _ = st.columns([0.9, 0.1])
-
-    with col_left:
-        st.write("")  # Spacer
-        message_container = st.container()
-        render_messages(message_container)
-
-        with st._bottom:
-            prompt = st.chat_input("Send a message", key="chat_input")
-
-        if prompt:
-            with st.chat_message("user"):
-                st.markdown(prompt)
-                copy_button(prompt)
-            with st.chat_message("assistant"):
-                prompt += st.session_state.file_context
-
-                st.write_stream(
-                    st.session_state.client.chat(
-                        model=st.session_state.selected_model,
-                        user_message=prompt,
-                        img=st.session_state.pasted_image))
-
-                if st.session_state.client.messages[-1][1] == "":
-                    st.error("An error occurred while processing your request. Please try again.", icon="🚨")
-                    st.session_state.client.messages = st.session_state.client.messages[:-2]
-                else:
-                    # Clear pasted image after use
-                    st.session_state.last_sent_image = st.session_state.pasted_image
-                    st.session_state.pasted_image = PasteResult(image_data=None)
-                    # Caption user message
-                    # Blocks new users without local ollama setup
-                    if LOCAL_NANOTASK_MODEL in MODELS_OLLAMA and st.session_state.bool_caption_usr_msg:
-                        caption = _non_streaming_api_query(
-                            model=LOCAL_NANOTASK_MODEL,
-                            prompt=prompt[:80],  # limit prompt length for captioning to avoid long processing times
-                            system_prompt=SYS_CAPTION_GENERATOR
-                        )
-                        st.session_state.usr_msg_captions += [caption]
-
-                    st.rerun()
-
-def render_messages(message_container) -> None:  # noqa
-    """Render chat messages from session state."""
-
-    message_container.empty()  # Clear previous messages
-
-    messages = st.session_state.client.messages
-
-    if len(messages) == 0:
-        return
-
-    with message_container:
-        for i in range(0, len(messages), 2):
-            is_expanded = i == len(messages) - 2 # expand only the latest message
-            label = f"QA-Pair {i // 2}: " if len(st.session_state.usr_msg_captions) == 0 else st.session_state.usr_msg_captions[i // 2]
-            _, user_msg = messages[i]
-            _, assistant_msg = messages[i + 1]
-
-            with st.expander(label=label, expanded=is_expanded):
-                # Display user and assistant messages
-                with st.chat_message("user"):
-                    st.markdown(user_msg)
-                    # Copy button only works for expanded expanders
-                    if is_expanded:
-                        copy_button(user_msg)
-
-                with st.chat_message("assistant"):
-                    st.markdown(assistant_msg)
-                    if is_expanded:
-                        copy_button(assistant_msg)
-
-                options_message(assistant_message=assistant_msg, key_suffix=f"{i // 2}", user_message=user_msg, index=i)
-
-
-# ----------------------------------------------------- RAG Workspace functions ---------------------------------------------------- #
-@st.cache_resource
-def load_rag_database(doc_path: str) -> RagDatabase:
-    """Initialize RAG Database with .md documents."""
-    rag_db = RagDatabase()
-    titles = []
-    texts = []
-    documents = [f for f in os.listdir(doc_path) if f.endswith('.md')]
-
-    for doc in documents:
-        with open(f"{doc_path}/{doc}", "r") as f:
-            text = f.read()
-            texts.append(text)
-            titles.append(doc)
-
-    rag_db.add_documents(titles=titles, texts=texts)
-    return rag_db
-
-def rag_workspace() -> None:
-    """RAG Workspace for retrieval-augmented generation."""
-    rag_database = load_rag_database(f"{OBSIDIAN_VAULT}/{OBSIDIAN_RAG}/")
-    with st._bottom:
-
-        rag_query = st.chat_input("Send a message", key="rag_input")
-        rag_query = RAGQuery(query=rag_query, k_documents=RAG_K_DOCS)
-        rag_response = rag_database.rag_process_query(rag_query)
-
-# ----------------------------------------------------- PDF Workspace functions ----------------------------------------------------- #
-@st.cache_data
-def _generate_learning_goals(text: str) -> str:
-    """Generate learning goals from PDF text."""
-    print("Generating learning goals...")
-    return _non_streaming_api_query(model=MACROTASK_MODEL, prompt=text, system_prompt=SYS_PDF_TO_LEARNING_GOALS)
-
-
-@st.cache_data
-def _generate_image_importance(pdf_text: str, learning_goals: str) -> str:
-    """Generate image importance from PDF text and learning goals."""
-    print("Generating image importance...")
-    response = _non_streaming_api_query(
-        model=MICROTASK_MODEL,
-        prompt="## Learning Goals\n" + learning_goals + "\n\n## PDF Content\n" + pdf_text,
-        system_prompt=SYS_IMAGE_IMPORTANCE,
-    )
-    return response
-
-@st.cache_data
-def _generate_flashcards(learning_goals: str) -> pd.DataFrame:
-    """Generate flashcards from learning goals."""
-    print("Generating flashcards...")
-    response = _non_streaming_api_query(
-        model=MACROTASK_MODEL,
-        prompt=learning_goals,
-        system_prompt=SYS_LEARNINGGOALS_TO_FLASHCARDS,
-    )
-    response = response.split("```json")[ -1].split("```")[0]  # Clean up response if necessary
-    flashcards = json.loads(response)
-    df_flashcards = pd.DataFrame(flashcards)
-    df_flashcards[DATE_ADDED] = datetime.now()
-    df_flashcards[NEXT_APPEARANCE] = datetime.now()
-    return df_flashcards
-
-@st.cache_data
-def _generate_wiki_article(pdf_text: str, learning_goals: str) -> str:  # noqa
-    print("Writing wiki article...")
-    wiki_prompt = f"""
-    Consider the following learning goals:
-    
-    {learning_goals}
-    
-    Dynamically adjust depth of explanation to the provided Bloom's taxonomy tags.
-    Use the hierarchy of learning goals to structure the article.
-    Generate a comprehensive study article based on the following PDF content.
-
-    {pdf_text}
-    """
-
-    return _non_streaming_api_query(model=MACROTASK_MODEL, prompt=wiki_prompt, system_prompt=SYS_PDF_TO_ARTICLE)
-
-
-def pdf_workspace() -> None:
-    """PDF Workspace for extracting learning goals and summary articles."""
-
-    tab_pdf, tab_summary, tab_flashcards = st.tabs(["PDF Viewer/Uploader", "PDF Summary", "PDF Flashcards"])
-
-    with tab_pdf:
-
-        with st.popover("Options"):
-            file = st.file_uploader("Upload PDF", type=["pdf"], key="pdf_workspace_uploader")
-
-        if file is not None:
-            pdf_text, pdf_height = _extract_text_from_pdf(file)
-            learning_goals = _generate_learning_goals(pdf_text)
-
-            col_learning_goals, col_pdf = st.columns([0.5,0.5])
-
-            with col_learning_goals:
-                st.header("Learning Goals")
-
-                if file is not None and learning_goals:
-
-                    parts = re.split(r'(?m)^\#\s*(.*)\s*$', learning_goals)  # -> [before, h1, c1, h2, c2, ...]
-                    for title, content in zip(parts[1::2], parts[2::2], strict=True):
-                        if content == "\n": # Empty content = title of pdf without learning goals
-                            st.markdown(f"##{title.strip()}")
-                        else: # Actual learning goal section
-                            with st.expander(title.strip()):
-                                if content.strip():
-                                    st.markdown(content.strip()) # noqa
-
-                options_message(assistant_message=learning_goals, key_suffix="pdf_learning_goals") if file is not None else None
-
-            with col_pdf:
-                st.header("Original PDF")
-                st.pdf(file, height=pdf_height) if file is not None else None
-
-    with tab_summary:
-        if file is not None:
-            button = st.button("Generate Summary Article")
-            if button:
-                wiki_article = _generate_wiki_article(pdf_text=pdf_text, learning_goals=learning_goals)
-                st.markdown(wiki_article if file is not None else "")
-                options_message(assistant_message=wiki_article, key_suffix="pdf_wiki_article") if file is not None else None
-            else:
-                st.info("Click the button to generate the summary article.")
-        else:
-            st.info("Upload a PDF in the 'PDF Viewer/Uploader' tab to generate a summary article.")
-
-    with tab_flashcards:
-        if file is not None:
-            button = st.button("Generate Flashcards", key="generate_flashcards_button")
-            if button:
-                flashcards_df = _generate_flashcards(learning_goals)
-                render_flashcards(flashcards_df)
-            else:
-                st.info("Click the button to generate flashcards.")
-        else:
-            st.info("Upload a PDF in the 'PDF Viewer/Uploader' tab to generate flashcards.")
-
-
-# ------------------------------------------------------ Helper functions ----------------------------------------------------- #
 def _non_streaming_api_query(model: str, prompt: str, system_prompt: str) -> str:
     """
     Converts streaming response generator to generic string.
