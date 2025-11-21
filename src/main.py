@@ -8,6 +8,7 @@ from src.lib.streamlit_helper import (
 PAGES = {
     "Select Page": [
         st.Page("pages/Gigachad_Bot.py"),
+        st.Page("pages/RAG_Workspace.py"),
         st.Page("pages/PDF_Workspace.py"),
     ],
 }
