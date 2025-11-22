@@ -28,7 +28,7 @@ def rag_sidebar() -> None:
                 model=st.session_state.selected_embedding_model,
                 label=DATABASE_LABAL_OBSIDIAN
             )
-            st.session_state.rag_databases.setdefault(DATABASE_LABAL_OBSIDIAN, {})[st.session_state.selected_embedding_model] = database
+            st.session_state.rag_databases.setdefault(DATABASE_LABAL_OBSIDIAN, {})[st.session_state.selected_embedding_model] = database # noqa
 
         st.markdown("---")
         st.markdown("## RAG Databases in Memory")

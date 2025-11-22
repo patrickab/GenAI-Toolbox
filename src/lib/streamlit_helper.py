@@ -73,6 +73,27 @@ def init_chat_variables() -> None:
         st.session_state.usr_msg_captions = []
         st.session_state.client = LLMClient()
 
+def paste_img() -> PasteResult:
+    """Handle image pasting in Streamlit app."""
+
+    # check wether streamlit background is in dark mode or light mode
+    bg_color = st.get_option("theme.base")  # 'light' or 'dark
+    if bg_color == "dark":
+        button_color_bg = "#34373E"
+        button_color_txt = "#FFFFFF"
+        button_color_hover = "#45494E"
+    else:
+        button_color_bg = "#E6E6E6"
+        button_color_txt = "#000000"
+        button_color_hover = "#CCCCCC"
+
+    paste_result = paste_image_button("Paste from clipboard",
+                background_color=button_color_bg,
+                text_color=button_color_txt,
+                hover_background_color=button_color_hover)
+
+    return paste_result
+
 def default_sidebar_chat() -> None:
     """Render the default sidebar for chat applications."""
     init_chat_variables()
@@ -125,25 +146,11 @@ def default_sidebar_chat() -> None:
                         st.session_state.client.store_history(DIRECTORY_CHAT_HISTORIES + '/' + filename + '.csv')
                         st.success("Successfully saved chat")
 
-        # ---------------------------------------------- Image Paste & Chat Histories ---------------------------------------------- #
+        # ---------------------------------------------- Paste Image & Chat Histories ---------------------------------------------- #
         st.markdown("---")
         with st.expander("Upload Image"):
-            # check wether streamlit background is in dark mode or light mode
-            bg_color = st.get_option("theme.base")  # 'light' or 'dark
-            if bg_color == "dark":
-                button_color_bg = "#34373E"
-                button_color_txt = "#FFFFFF"
-                button_color_hover = "#45494E"
-            else:
-                button_color_bg = "#E6E6E6"
-                button_color_txt = "#000000"
-                button_color_hover = "#CCCCCC"
 
-            paste_result = paste_image_button("Paste from clipboard",
-                        background_color=button_color_bg,
-                        text_color=button_color_txt,
-                        hover_background_color=button_color_hover)
-
+            paste_result = paste_img()
             st.session_state.paste_result = paste_result
 
             # Blocking logic because paste_image_button always returns the most recent pasted image
