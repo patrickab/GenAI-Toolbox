@@ -1,3 +1,0 @@
-[submodule "rag-database"]
-	path = rag-database
-	url = git@github.com:patrickab/rag-database.git
