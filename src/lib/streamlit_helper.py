@@ -1,39 +1,24 @@
 """Streamlit helper functions."""
 
-from datetime import datetime
 import io
-import json
 import os
-import re
 import tempfile
 
 import fitz
-import pandas as pd
 import pymupdf4llm
 from st_copy import copy_button
 import streamlit as st
 from streamlit_paste_button import PasteResult, paste_image_button
 
 from src.config import (
-    CHAT_HISTORY_FOLDER,
-    LOCAL_NANOTASK_MODEL,
-    MACROTASK_MODEL,
-    MICROTASK_MODEL,
+    DIRECTORY_CHAT_HISTORIES,
+    DIRECTORY_OBSIDIAN_VAULT,
     MODELS_GEMINI,
     MODELS_OLLAMA,
     MODELS_OPENAI,
     NANOTASK_MODEL,
-    OBSIDIAN_VAULT,
 )
-from src.lib.flashcards import DATE_ADDED, NEXT_APPEARANCE, render_flashcards
-from src.lib.non_user_prompts import (
-    SYS_CAPTION_GENERATOR,
-    SYS_IMAGE_IMPORTANCE,
-    SYS_LEARNINGGOALS_TO_FLASHCARDS,
-    SYS_NOTE_TO_OBSIDIAN_YAML,
-    SYS_PDF_TO_ARTICLE,
-    SYS_PDF_TO_LEARNING_GOALS,
-)
+from src.lib.non_user_prompts import SYS_NOTE_TO_OBSIDIAN_YAML
 from src.lib.prompts import (
     SYS_AI_TUTOR,
     SYS_ARTICLE,
@@ -46,16 +31,18 @@ from src.lib.prompts import (
 )
 from src.llm_client import LLMClient
 
-AVAILABLE_MODELS = []
+AVAILABLE_LLM_MODELS = []
 
 if os.getenv("GEMINI_API_KEY"):
-    AVAILABLE_MODELS += MODELS_GEMINI
+    AVAILABLE_LLM_MODELS += MODELS_GEMINI
 
 if os.getenv("OPENAI_API_KEY"):
-    AVAILABLE_MODELS += MODELS_OPENAI
+    AVAILABLE_LLM_MODELS += MODELS_OPENAI
 
 if MODELS_OLLAMA != []:
-    AVAILABLE_MODELS += MODELS_OLLAMA
+    ignore_embedding_models = ["embeddinggemma:300m"]
+    AVAILABLE_LLM_MODELS += MODELS_OLLAMA
+    AVAILABLE_LLM_MODELS = [model for model in AVAILABLE_LLM_MODELS if model not in ignore_embedding_models]
 
 AVAILABLE_PROMPTS = {
     "Quick Overview": SYS_QUICK_OVERVIEW,
@@ -70,60 +57,62 @@ AVAILABLE_PROMPTS = {
 
 
 def init_session_state() -> None:
+    """Initialize session state variables. Called within main directly after startup."""
     if "client" not in st.session_state:
-        st.session_state.file_context = ""
-        st.session_state.system_prompts = AVAILABLE_PROMPTS
-        st.session_state.selected_prompt = "<empty prompt>"
-        st.session_state.selected_model = AVAILABLE_MODELS[0]
         st.session_state.client = LLMClient()
-        st.session_state.client._set_system_prompt(next(iter(st.session_state.system_prompts.values()))) # set to first prompt
-        st.session_state.rag_database_repo = ""
+
+def init_chat_variables() -> None:
+    """Initialize session state variables for chat."""
+    if "system_prompts" not in st.session_state:
+        st.session_state.file_context = ""
+        st.session_state.selected_model = AVAILABLE_LLM_MODELS[0]
+        st.session_state.selected_prompt = next(iter(AVAILABLE_PROMPTS.keys()))
+        st.session_state.system_prompts = AVAILABLE_PROMPTS
         st.session_state.pasted_image = PasteResult(image_data=None)
-        st.session_state.last_sent_image = PasteResult(image_data=None)
+        st.session_state.imgs_sent = [PasteResult(image_data=None)]
         st.session_state.usr_msg_captions = []
+        st.session_state.client = LLMClient()
 
-
-@st.cache_resource
-def _extract_text_from_pdf(file: io.BytesIO) -> str:
-    """Extract text from uploaded PDF file using pymupdf4llm."""
-    # Create temporary file - pymupdf4llm requires a file path but Streamlit's doesnt support that directly
-    with tempfile.TemporaryDirectory(delete=True) as tmpdir:
-        # Preserve filename to allow correct naming of images extracted from PDFs (future proof)
-        temp_file_path = os.path.join(tmpdir, file.name)
-        with open(temp_file_path, "wb") as f:
-            f.write(file.getvalue())
-            text = pymupdf4llm.to_markdown(doc=f, write_images=False)
-
-        # Get the height of first page
-        doc = fitz.open(temp_file_path)
-        doc_height = int(doc[0].rect.height * 1.5)  # Scale up for better visibility
-
-    return text, doc_height
-
-
-def application_side_bar() -> None:
-    model = st.sidebar.selectbox(
-        "Model",
-        AVAILABLE_MODELS,
-        key="model_select",
-    )
-
-    sys_prompt_name = st.sidebar.selectbox(
-        "System prompt",
-        list(st.session_state.system_prompts.keys()),
-        key="prompt_select",
-    )
+def default_sidebar_chat() -> None:
+    """Render the default sidebar for chat applications."""
+    init_chat_variables()
 
     with st.sidebar:
+
+        model = st.selectbox(
+            "Select LLM",
+            AVAILABLE_LLM_MODELS,
+            key="model_select",
+        )
+
+        sys_prompt_name = st.selectbox(
+            "System prompt",
+            list(st.session_state.system_prompts.keys()),
+            key="prompt_select",
+        )
+
+        if sys_prompt_name != st.session_state.selected_prompt:
+            st.session_state.client._set_system_prompt(st.session_state.system_prompts[sys_prompt_name])
+            st.session_state.selected_prompt = sys_prompt_name
+
+        if model != st.session_state.selected_model:
+            st.session_state.selected_model = model
+
+        # -------------------------------------------------- Options & File Upload -------------------------------------------------- #
         st.markdown("---")
         with st.expander("Options", expanded=False):
+            st.session_state.bool_caption_usr_msg = st.toggle("Caption User Messages", key="caption_toggle", value=False)
+            st.markdown("---")
             if st.button("Reset History", key="reset_history_main"):
                 st.session_state.client.reset_history()
 
             st.markdown("---")
             file = st.file_uploader(type=["pdf", "py", "md", "cpp", "txt"], label="Upload file context (.pdf/.txt/.py)")
             if file is not None:
-                text = _extract_text_from_pdf(file)
+                if file.type == "application/pdf":
+                    text, _ = _extract_text_from_pdf(file)
+                else:
+                    text = file.getvalue().decode("utf-8")
                 st.session_state.file_context = text
 
             if st.session_state.client.messages != []:
@@ -131,11 +120,12 @@ def application_side_bar() -> None:
                 with st.popover("Save History"):
                     filename = st.text_input("Filename", key="history_filename_input")
                     if st.button("Save Chat History", key="save_chat_history_button"):
-                        if not os.path.exists(CHAT_HISTORY_FOLDER):
-                            os.makedirs(CHAT_HISTORY_FOLDER)
-                        st.session_state.client.store_history(CHAT_HISTORY_FOLDER + '/' + filename + '.csv')
+                        if not os.path.exists(DIRECTORY_CHAT_HISTORIES):
+                            os.makedirs(DIRECTORY_CHAT_HISTORIES)
+                        st.session_state.client.store_history(DIRECTORY_CHAT_HISTORIES + '/' + filename + '.csv')
                         st.success("Successfully saved chat")
 
+        # ---------------------------------------------- Image Paste & Chat Histories ---------------------------------------------- #
         st.markdown("---")
         with st.expander("Upload Image"):
             # check wether streamlit background is in dark mode or light mode
@@ -162,8 +152,8 @@ def application_side_bar() -> None:
                 st.image(paste_result.image_data)
                 st.session_state.pasted_image = paste_result
 
-        if os.path.exists(CHAT_HISTORY_FOLDER):
-            chat_histories = [f.replace('.csv', '') for f in os.listdir(CHAT_HISTORY_FOLDER) if f.endswith('.csv')]
+        if os.path.exists(DIRECTORY_CHAT_HISTORIES):
+            chat_histories = [f.replace('.csv', '') for f in os.listdir(DIRECTORY_CHAT_HISTORIES) if f.endswith('.csv')]
         else:
             chat_histories = []
         
@@ -175,71 +165,20 @@ def application_side_bar() -> None:
                         col_load, col_delete, col_archive = st.columns(3)
                         with col_load:
                             if st.button("⟳", key=f"load_{history}"):
-                                st.session_state.client.load_history(os.path.join(CHAT_HISTORY_FOLDER, history + '.csv'))
+                                st.session_state.client.load_history(os.path.join(DIRECTORY_CHAT_HISTORIES, history + '.csv'))
                         with col_delete:
                             if st.button("🗑", key=f"delete_{history}"):
-                                os.remove(os.path.join(CHAT_HISTORY_FOLDER, history + '.csv'))
+                                os.remove(os.path.join(DIRECTORY_CHAT_HISTORIES, history + '.csv'))
                                 st.rerun()
                         with col_archive:
                             if st.button("⛁", key=f"archive_{history}"):
-                                if not os.path.exists(CHAT_HISTORY_FOLDER + '/archived/'):
-                                    os.makedirs(CHAT_HISTORY_FOLDER + '/archived/')
+                                if not os.path.exists(DIRECTORY_CHAT_HISTORIES + '/archived/'):
+                                    os.makedirs(DIRECTORY_CHAT_HISTORIES + '/archived/')
                                 os.rename(
-                                    os.path.join(CHAT_HISTORY_FOLDER, history + '.csv'),
-                                    os.path.join(CHAT_HISTORY_FOLDER, 'archived', history + '.csv')
+                                    os.path.join(DIRECTORY_CHAT_HISTORIES, history + '.csv'),
+                                    os.path.join(DIRECTORY_CHAT_HISTORIES, 'archived', history + '.csv')
                                 )
                                 st.rerun()
-
-    if sys_prompt_name != st.session_state.selected_prompt:
-        st.session_state.client._set_system_prompt(st.session_state.system_prompts[sys_prompt_name])
-        st.session_state.selected_prompt = sys_prompt_name
-
-    if model != st.session_state.selected_model:
-        st.session_state.selected_model = model
-
-
-def chat_interface() -> None:
-    col_left, _ = st.columns([0.9, 0.1])
-
-    with col_left:
-        st.write("")  # Spacer
-        message_container = st.container()
-        render_messages(message_container)
-
-        with st._bottom:
-            prompt = st.chat_input("Send a message")
-
-        if prompt:
-            with st.chat_message("user"):
-                st.markdown(prompt)
-                copy_button(prompt)
-            with st.chat_message("assistant"):
-                prompt += st.session_state.file_context
-
-                st.write_stream(
-                    st.session_state.client.chat(
-                        model=st.session_state.selected_model,
-                        user_message=prompt,
-                        img=st.session_state.pasted_image))
-
-                if st.session_state.client.messages[-1][1] == "":
-                    st.error("An error occurred while processing your request. Please try again.", icon="🚨")
-                    st.session_state.client.messages = st.session_state.client.messages[:-2]
-                else:
-                    # Clear pasted image after use
-                    st.session_state.last_sent_image = st.session_state.pasted_image
-                    st.session_state.pasted_image = PasteResult(image_data=None)
-                    # Caption user message
-                    if LOCAL_NANOTASK_MODEL in MODELS_OLLAMA: # avoids functioncall for new users without ollama setup
-                        caption = _non_streaming_api_query(
-                            model=LOCAL_NANOTASK_MODEL,
-                            prompt=prompt[:80],  # limit prompt length for captioning to avoid long processing times
-                            system_prompt=SYS_CAPTION_GENERATOR
-                        )
-                        st.session_state.usr_msg_captions += [caption]
-
-                    st.rerun()
-
 
 def _non_streaming_api_query(model: str, prompt: str, system_prompt: str) -> str:
     """
@@ -253,59 +192,6 @@ def _non_streaming_api_query(model: str, prompt: str, system_prompt: str) -> str
 
     return response_text
 
-
-@st.cache_data
-def _generate_learning_goals(text: str) -> str:
-    """Generate learning goals from PDF text."""
-    print("Generating learning goals...")
-    return _non_streaming_api_query(model=MACROTASK_MODEL, prompt=text, system_prompt=SYS_PDF_TO_LEARNING_GOALS)
-
-
-@st.cache_data
-def _generate_image_importance(pdf_text: str, learning_goals: str) -> str:
-    """Generate image importance from PDF text and learning goals."""
-    print("Generating image importance...")
-    response = _non_streaming_api_query(
-        model=MICROTASK_MODEL,
-        prompt="## Learning Goals\n" + learning_goals + "\n\n## PDF Content\n" + pdf_text,
-        system_prompt=SYS_IMAGE_IMPORTANCE,
-    )
-    return response
-
-@st.cache_data
-def _generate_flashcards(learning_goals: str) -> pd.DataFrame:
-    """Generate flashcards from learning goals."""
-    print("Generating flashcards...")
-    response = _non_streaming_api_query(
-        model=MACROTASK_MODEL,
-        prompt=learning_goals,
-        system_prompt=SYS_LEARNINGGOALS_TO_FLASHCARDS,
-    )
-    response = response.split("```json")[ -1].split("```")[0]  # Clean up response if necessary
-    flashcards = json.loads(response)
-    df_flashcards = pd.DataFrame(flashcards)
-    df_flashcards[DATE_ADDED] = datetime.now()
-    df_flashcards[NEXT_APPEARANCE] = datetime.now()
-    return df_flashcards
-
-@st.cache_data
-def _generate_wiki_article(pdf_text: str, learning_goals: str) -> str:  # noqa
-    print("Writing wiki article...")
-    wiki_prompt = f"""
-    Consider the following learning goals:
-    
-    {learning_goals}
-    
-    Dynamically adjust depth of explanation to the provided Bloom's taxonomy tags.
-    Use the hierarchy of learning goals to structure the article.
-    Generate a comprehensive study article based on the following PDF content.
-
-    {pdf_text}
-    """
-
-    return _non_streaming_api_query(model=MACROTASK_MODEL, prompt=wiki_prompt, system_prompt=SYS_PDF_TO_ARTICLE)
-
-
 def write_to_md(filename: str, message: str) -> None:
     """Write an assistant response to .md (idx: 0 = most recent)."""
     if not filename.endswith(".md"):
@@ -318,72 +204,13 @@ def write_to_md(filename: str, message: str) -> None:
         system_prompt=sys_prompt.replace("{{user_notes}}", message),
     )
 
-    file_path = os.path.join(OBSIDIAN_VAULT, filename)
+    file_path = os.path.join(DIRECTORY_OBSIDIAN_VAULT, filename)
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(yaml_header + "\n" + message)
 
     os.makedirs("markdown", exist_ok=True)
     with open(os.path.join("markdown", filename), "w", encoding="utf-8") as f:
         f.write(yaml_header + "\n" + message)
-
-def pdf_workspace() -> None:
-    """PDF Workspace for extracting learning goals and summary articles."""
-
-    tab_pdf, tab_summary, tab_flashcards = st.tabs(["PDF Viewer/Uploader", "PDF Summary", "PDF Flashcards"])
-
-    with tab_pdf:
-
-        with st.popover("Options"):
-            file = st.file_uploader("Upload PDF", type=["pdf"], key="pdf_workspace_uploader")
-
-        if file is not None:
-            pdf_text, pdf_height = _extract_text_from_pdf(file)
-            learning_goals = _generate_learning_goals(pdf_text)
-
-            col_learning_goals, col_pdf = st.columns([0.5,0.5])
-
-            with col_learning_goals:
-                st.header("Learning Goals")
-
-                if file is not None and learning_goals:
-
-                    parts = re.split(r'(?m)^\#\s*(.*)\s*$', learning_goals)  # -> [before, h1, c1, h2, c2, ...]
-                    for title, content in zip(parts[1::2], parts[2::2], strict=True):
-                        if content == "\n": # Empty content = title of pdf without learning goals
-                            st.markdown(f"##{title.strip()}")
-                        else: # Actual learning goal section
-                            with st.expander(title.strip()):
-                                if content.strip():
-                                    st.markdown(content.strip()) # noqa
-
-                options_message(assistant_message=learning_goals, key_suffix="pdf_learning_goals") if file is not None else None
-
-            with col_pdf:
-                st.header("Original PDF")
-                st.pdf(file, height=pdf_height) if file is not None else None
-
-    with tab_summary:
-        if file is not None:
-            button = st.button("Generate Summary Article")
-            if button:
-                wiki_article = _generate_wiki_article(pdf_text=pdf_text, learning_goals=learning_goals)
-                st.markdown(wiki_article if file is not None else "")
-                options_message(assistant_message=wiki_article, key_suffix="pdf_wiki_article") if file is not None else None
-            else:
-                st.info("Click the button to generate the summary article.")
-        else:
-            st.info("Upload a PDF in the 'PDF Viewer/Uploader' tab to generate a summary article.")
-
-    with tab_flashcards:
-        if file is not None:
-            button = st.button("Generate Flashcards", key="generate_flashcards_button")
-            if button:
-                flashcards_df = _generate_flashcards(learning_goals)
-                render_flashcards(flashcards_df)
-            else:
-                st.info("Click the button to generate flashcards.")
-        else:
-            st.info("Upload a PDF in the 'PDF Viewer/Uploader' tab to generate flashcards.")
 
 def options_message(assistant_message: str, key_suffix: str, user_message: str = None, index: int = None) -> None: # noqa
     """Uses st.popover for a less intrusive save option."""
@@ -407,38 +234,6 @@ def options_message(assistant_message: str, key_suffix: str, user_message: str =
             del st.session_state.client.messages[index:index+2]
             st.rerun()
 
-def render_messages(message_container) -> None:  # noqa
-    """Render chat messages from session state."""
-
-    message_container.empty()  # Clear previous messages
-
-    messages = st.session_state.client.messages
-
-    if len(messages) == 0:
-        return
-
-    with message_container:
-        for i in range(0, len(messages), 2):
-            is_expanded = i == len(messages) - 2 # expand only the latest message
-            label = f"QA-Pair {i // 2}: " if len(st.session_state.usr_msg_captions) == 0 else st.session_state.usr_msg_captions[i // 2]
-            _, user_msg = messages[i]
-            _, assistant_msg = messages[i + 1]
-
-            with st.expander(label=label, expanded=is_expanded):
-                # Display user and assistant messages
-                with st.chat_message("user"):
-                    st.markdown(user_msg)
-                    # Copy button only works for expanded expanders
-                    if is_expanded:
-                        copy_button(user_msg)
-
-                with st.chat_message("assistant"):
-                    st.markdown(assistant_msg)
-                    if is_expanded:
-                        copy_button(assistant_msg)
-
-                options_message(assistant_message=assistant_msg, key_suffix=f"{i // 2}", user_message=user_msg, index=i)
-
 def apply_custom_css() -> None:
     """Apply custom CSS styles to Streamlit app."""
     st.markdown(
@@ -458,3 +253,22 @@ def apply_custom_css() -> None:
         """,
         unsafe_allow_html=True,
     )
+
+@st.cache_resource
+def _extract_text_from_pdf(file: io.BytesIO) -> str:
+    """Extract text from uploaded PDF file using pymupdf4llm."""
+    # Create temporary file - pymupdf4llm requires a file path but Streamlit's doesnt support that directly
+    # However, streamlits file uploader returns a BytesIO object which we can write to a temp file & read from there
+    # Using with context manager ensures temp file is deleted after use
+    with tempfile.TemporaryDirectory(delete=True) as tmpdir:
+        # Preserve filename to allow correct naming of images extracted from PDFs (future proof)
+        temp_file_path = os.path.join(tmpdir, file.name)
+        with open(temp_file_path, "wb") as f:
+            f.write(file.getvalue())
+            text = pymupdf4llm.to_markdown(doc=f, write_images=False)
+
+        # Get the height of first page
+        doc = fitz.open(temp_file_path)
+        doc_height = int(doc[0].rect.height * 1.5)  # Scale up for better visibility
+
+    return text, doc_height

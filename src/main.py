@@ -1,23 +1,27 @@
 import streamlit as st
 
-from src.lib.streamlit_helper import application_side_bar, apply_custom_css, chat_interface, init_session_state, pdf_workspace
+from src.lib.streamlit_helper import (
+    apply_custom_css,
+    init_session_state,
+)
 
+PAGES = {
+    "Select Page": [
+        st.Page("pages/Gigachad_Bot.py"),
+        st.Page("pages/RAG_Workspace.py"),
+        st.Page("pages/PDF_Workspace.py"),
+    ],
+}
 
 def main() -> None:
     """Main function to run the Streamlit app."""
 
-    st.set_page_config(page_title="Learning Assistant", page_icon=":robot:", layout="wide", initial_sidebar_state="collapsed")
+    st.set_page_config(page_title="Gigachad-Bot", page_icon=":robot:", layout="wide")
 
     apply_custom_css()
     init_session_state()
-    application_side_bar()
-
-    tab_chat, tab_pdf = st.tabs(["Study Assistant", "PDF Workspace"])
-
-    with tab_chat:
-        chat_interface()
-    with tab_pdf:
-        pdf_workspace()
 
 if __name__ == "__main__":
+    pages = st.navigation(pages=PAGES, position="top")
+    pages.run()
     main()
