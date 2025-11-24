@@ -70,6 +70,7 @@ def init_session_state() -> None:
     Use for global session state variables.
     """
     if "client" not in st.session_state:
+        st.session_state.workspace = "main"
         st.session_state.client = LLMClient()
         st.session_state.imgs_sent = [EMPTY_PASTE_RESULT]
         st.session_state.pasted_image = EMPTY_PASTE_RESULT

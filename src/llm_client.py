@@ -108,7 +108,7 @@ class LLMClient:
                 # Use vLLM settings
                 api_base = str(self.vllm_client.base_url)
                 custom_llm_provider = "openai" # vLLM mimics OpenAI
-            
+
             else:
                 # Use Ollama settings
                 api_base = "http://localhost:11434"

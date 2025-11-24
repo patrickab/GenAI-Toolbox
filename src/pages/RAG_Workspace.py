@@ -1,7 +1,8 @@
 import os
+from typing import Optional
 
 import polars as pl
-from rag_database.rag_config import MODEL_CONFIG, DatabaseKeys, empty_rag_schema
+from rag_database.rag_config import MODEL_CONFIG, DatabaseKeys
 from rag_database.rag_database import RagDatabase, RAGQuery
 import streamlit as st
 
@@ -49,20 +50,24 @@ def rag_sidebar() -> None:
         st.markdown("---")
 
 @st.cache_resource
-def load_rag_database(doc_path: str, model: str, label: str) -> RagDatabase:
+def load_rag_database(doc_path: str, model: str, label: str, embedding_dimensions: Optional[int]=None) -> RagDatabase:
     """
     Initialize RAG Database with .md documents.
     Loads existing embeddings if available.
     Embed new documents & update database accordingly.
     """
+    if embedding_dimensions is None:
+        embedding_dimensions = MODEL_CONFIG[model]["dimensions"]
 
     parquet_embeddings = f"{DIRECTORY_EMBEDDINGS}/{label}_{model}.parquet"
-    if os.path.exists(parquet_embeddings): # noqa
+    if os.path.exists(parquet_embeddings):
+        # Load existing RAG database
         rag_dataframe = pl.read_parquet(parquet_embeddings)
+        rag_db = RagDatabase(model=model, database=rag_dataframe)
     else:
-        rag_dataframe = empty_rag_schema(model=model)
+        # Initialize empty RAG database
+        rag_db = RagDatabase(model=model, embedding_dimensions=embedding_dimensions)
 
-    rag_db = RagDatabase(model=model, database=rag_dataframe)
     titles = []
     texts = []
     documents = [f for f in os.listdir(doc_path) if f.endswith('.md')]
@@ -101,7 +106,6 @@ def rag_workspace_obsidian() -> None:
                     st.markdown(doc[DatabaseKeys.KEY_TXT])
 
 if __name__ == "__main__":
-
     st.set_page_config(page_title="RAG Workspace", page_icon=":robot:", layout="wide")
     init_rag_workspace()
     rag_workspace_obsidian()
