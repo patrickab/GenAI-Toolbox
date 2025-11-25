@@ -10,6 +10,7 @@ import time
 from ansi2html import Ansi2HTMLConverter
 import streamlit as st
 
+from config import SERVER_STATIC_DIR
 from src.lib.streamlit_helper import nyan_cat_spinner
 
 
@@ -152,6 +153,7 @@ def vlm_markdown_miner() -> None:
         
         st.info("Running PDF Miner...")
         run_command_with_output(["bash", "src/static/pdf-minerU.sh"])
+    subprocess.run(["bash", "mv", "converted*", SERVER_STATIC_DIR])
 
 if __name__ == "__main__":
     vlm_markdown_miner()
