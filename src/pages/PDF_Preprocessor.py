@@ -24,8 +24,8 @@ def pdf_preprocessor() -> None:
     Upload large PDFs, view them inline, and slice specific page ranges for download.
     First preprocessing step for RAG mining.
     """
-    st.set_page_config(layout="wide", page_title="PDF Manager")
-    st.header("PDF Manager")
+    st.set_page_config(layout="wide", page_title="PDF Preprocessor")
+    st.header("PDF Preprocessor")
 
     cols = st.columns(2)
 
@@ -34,7 +34,8 @@ def pdf_preprocessor() -> None:
 
     # Block execution / notify user
     if not uploaded_files:
-        st.info("Upload a file to begin.")
+        with cols[0]:
+            st.info("Upload a file to begin preprocessing.")
         return
 
     # Convert single file to list for uniform processing
