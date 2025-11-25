@@ -1,5 +1,9 @@
 import subprocess
 
+# Fileserver data location
+SERVER_STATIC_DIR = "src/static"
+SERVER_APP_STATIC_DIR = "app/static"
+
 # Set to empty string if you dont use Obsidian
 # Note: You can sync obsidian with Nextcloud, Dropbox, etc. to enable cloud integration of your notes.
 DIRECTORY_OBSIDIAN_VAULT = "/home/noob/Nextcloud/obsidian"

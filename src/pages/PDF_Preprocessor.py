@@ -4,6 +4,7 @@ import time
 import fitz
 import streamlit as st
 
+from config import SERVER_APP_STATIC_DIR, SERVER_STATIC_DIR
 from src.lib.streamlit_helper import print_metrics
 
 
@@ -50,7 +51,7 @@ def pdf_preprocessor() -> None:
                 st.session_state.uploaded_files.append(file)
 
                 # Store file on server for iframe rendering
-                file_path = os.path.join(st.session_state.static_dir, file.name)
+                file_path = os.path.join(SERVER_STATIC_DIR, file.name)
                 with open(file_path, "wb") as f:
                     f.write(file.getbuffer())
 
@@ -124,7 +125,7 @@ def pdf_preprocessor() -> None:
 
                     base_name, ext = os.path.splitext(st.session_state.uploaded_files[i].name)
                     sliced_filename = f"{base_name}_preprocessed_{start_p}-{end_p}{ext}"
-                    sliced_filepath = os.path.join(st.session_state.static_dir, sliced_filename)
+                    sliced_filepath = os.path.join(SERVER_STATIC_DIR, sliced_filename)
 
                     # Store sliced PDF & remove original server-file from static - PDF source location remains untouched
                     new_doc.save(sliced_filepath)
@@ -148,7 +149,7 @@ def pdf_preprocessor() -> None:
 
             # Render the iframe pointing to the static file URL**
             # The URL will be `app/static/<selected_filename>.pdf?t=<timestamp>` to avoid caching issues
-            pdf_url = f"{st.session_state.app_static_dir}/{st.session_state.uploaded_files[i].name}?t={int(time.time())}"
+            pdf_url = f"{SERVER_APP_STATIC_DIR}/{st.session_state.uploaded_files[i].name}?t={int(time.time())}"
 
             st.markdown(
                 f'''

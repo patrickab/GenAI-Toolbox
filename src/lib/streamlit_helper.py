@@ -21,6 +21,7 @@ from src.config import (
     MODELS_OLLAMA,
     MODELS_OPENAI,
     NANOTASK_MODEL,
+    SERVER_STATIC_DIR,
 )
 from src.lib.non_user_prompts import SYS_NOTE_TO_OBSIDIAN_YAML
 from src.lib.prompts import (
@@ -70,10 +71,7 @@ def init_session_state() -> None:
     Use for global session state variables.
     """
     # Create static directory for serving PDFs
-    st.session_state.static_dir = os.path.join("src", "static")
-    st.session_state.app_static_dir = os.path.join("app", "static")
-    if not os.path.exists(st.session_state.static_dir):
-        os.makedirs(st.session_state.static_dir)
+    os.makedirs(SERVER_STATIC_DIR, exist_ok=True)
 
     if "client" not in st.session_state:
         st.session_state.workspace = "main"
