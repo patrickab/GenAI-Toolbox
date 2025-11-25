@@ -142,12 +142,12 @@ def editor(text_to_edit: str, language: str, key: str) -> str:
         label="Editor Theme",
         options=THEMES,
         index=THEMES.index(default_theme),
-        key="ocr_editor_theme"
+        key=f"editor_theme_{key}"
     )
 
     line_count = text_to_edit.count("\n") + 1
     adaptive_height = line_count*15
-    content = st_ace(value=text_to_edit, language=language, height=adaptive_height, key=f"editor_{key}", theme=selected_theme)
+    content = st_ace(value=text_to_edit, language=language, height=adaptive_height, key=f"editor_{key}", theme=selected_theme) #noqa
     content # noqa
     return content
 
