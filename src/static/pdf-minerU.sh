@@ -3,7 +3,7 @@
 # Executes [MinerU](https://github.com/opendatalab/MinerU) - GPU required
 
 # Iterate over all PDF files in the current directory
-for file in *.pdf; do
+for file in src/static/*.pdf; do
   # Check if the file exists and is a regular file
   if [[ -f "$file" ]]; then
     # Extract the filename without the extension
