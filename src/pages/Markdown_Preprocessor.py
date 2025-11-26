@@ -134,20 +134,22 @@ def markdown_preprocessor() -> None:
 
 
 # ----------------------------- Preprocessing Step 2 - Chunking / Hierarchy / Parquet Storage ----------------------------- #
-def parse_markdown_to_chunks(markdown_text: str) -> list[dict]:
+def parse_markdown_to_chunks(markdown_filepath: str) -> pl.DataFrame:
     """
     Helper function called in 2nd level markdown preprocessor
     Parses markdown text into hierarchical chunks based on heading levels.
     Each chunk is associated with its most specific heading (H1, H2, or H3).
 
-    Returns list of:
-        - chunk dictionaries with
-            - content
-            - title
-            - metadata
+    Returns a Polars DataFrame with columns for title, content, and metadata.
     """
-    # TODO: Introduce robustness to Codeblocks
-    lines = markdown_text.split('\n')
+    try:
+        with open(markdown_filepath, "r", encoding="utf-8") as f:
+            markdown_text = f.read()
+    except FileNotFoundError:
+        # Return an empty DataFrame with the correct schema if the file doesn't exist
+        return pl.DataFrame({key: [] for key in [DatabaseKeys.KEY_TITLE, DatabaseKeys.KEY_TXT, DatabaseKeys.KEY_METADATA]})
+
+    lines = markdown_text.split("\n")
 
     # State tracking
     current_h1 = "General"
@@ -192,7 +194,7 @@ def parse_markdown_to_chunks(markdown_text: str) -> list[dict]:
         # Detect Headers
         if line.startswith("# "):
             save_chunk() # Save whatever we had before this new chapter
-            current_buffer = [] 
+            current_buffer = []
             current_h1 = line.strip().replace("# ", "")
             current_h2 = "General" # Reset lower levels
             current_h3 = "General"
@@ -213,99 +215,126 @@ def parse_markdown_to_chunks(markdown_text: str) -> list[dict]:
     # Save the final buffer
     save_chunk()
 
-    return chunks
+    if not chunks:
+        return pl.DataFrame({key: [] for key in [DatabaseKeys.KEY_TITLE, DatabaseKeys.KEY_TXT, DatabaseKeys.KEY_METADATA]})
 
-def render_chunks(chunks: list[dict], output_name:str) -> None:
+    # Create DataFrame directly from the list of dictionaries
+    df = pl.DataFrame(chunks)
 
-    def render_chunk(chunks: list[dict], chunk: dict, output_name:str, i: str) -> None:
+    # Rename columns to match the database schema
+    df = df.rename({
+        "title": DatabaseKeys.KEY_TITLE,
+        "content": DatabaseKeys.KEY_TXT,
+        "metadata": DatabaseKeys.KEY_METADATA
+    })
 
-        cols_buttons = st.columns([1,1,8])
-        cols_text = st.columns([1,1])
+    return df.select(DatabaseKeys.KEY_TITLE, DatabaseKeys.KEY_TXT, DatabaseKeys.KEY_METADATA)
 
-        #with cols_text[0]:
-        #    edited_text = editor(language="latex", text_to_edit=chunk['content'], key=f"editor_{output_name}_{i}") # noqa
-        #with cols_text[1]:
-        #    st.markdown(edited_text)
+def render_chunks(output_name: str) -> None:
+    """
+    Renders an interactive editor for a DataFrame of chunks stored in st.session_state.
+    Modifications (save/delete) are performed directly on the DataFrame in session state.
+    """
+    # Get the DataFrame from session state
+    chunks_df = st.session_state.chunk_dfs[output_name]
 
-        st.markdown(chunk['content'])
+    # Ensure a unique, stable row identifier exists for editing/deleting
+    if "chunk_id" not in chunks_df.columns:
+        chunks_df = chunks_df.with_row_count("chunk_id")
+        st.session_state.chunk_dfs[output_name] = chunks_df
 
-        #if cols_buttons[0].button("Save Chunk Changes", key=f"save_md_chunker_{output_name}_{i}"):
-        #    chunks[i-1]['content'] = edited_text
-        #    st.rerun()
-        #if cols_buttons[1].button("Delete Chunk", key=f"delete_md_chunker_{output_name}_{i}"):
-        #    chunks.remove(chunk)
-        #    st.rerun()
+    def render_chunk(row: dict) -> None:
+        """Renders a single chunk (DataFrame row) with editing capabilities."""
+        unique_key = f"{output_name}_{row['chunk_id']}"
 
-        #return chunks, chunk
+        # Buttons to toggle between viewing and editing mode
+        toggle_cols = st.columns([1, 1, 8])
+        if toggle_cols[0].button("Edit Chunk", key=f"edit_md_chunker_{unique_key}"):
+            st.session_state[f"edit_mode_{unique_key}"] = True
+        if toggle_cols[1].button("Close Editor", key=f"close_md_chunker_{unique_key}"):
+            st.session_state[f"edit_mode_{unique_key}"] = False
 
-    level_1 = 1
-    level_2 = 2
-    level_3 = 3
-    level_1_chunks = [c for c in chunks if c["metadata"]["level"] == level_1]
-    level_2_chunks = [c for c in chunks if c["metadata"]["level"] == level_2]
-    level_3_chunks = [c for c in chunks if c["metadata"]["level"] == level_3]
+        # In edit mode, show the editor; otherwise, show the rendered markdown.
+        if st.session_state.get(f"edit_mode_{unique_key}", False): # In edit mode
+            cols_text = st.columns([1, 1])
+            with cols_text[0]:
+                editor_key = f"editor_{output_name}_{row[DatabaseKeys.KEY_TITLE]}_{row['chunk_id']}"
+                edited_text = editor(language="latex", text_to_edit=row[DatabaseKeys.KEY_TXT], key=editor_key)
 
-    for chunk in level_1_chunks:
-        with st.expander(f"{chunk['title']}"):
-            #chunks, chunk = render_chunk(chunks, chunk, output_name=output_name, i=chunk["title"])
-            render_chunk(chunks, chunk, output_name=output_name, i=chunk["title"])
-            # while consecutive cunks of lower levels exist, render them too
-            for chunk in [c for c in level_2_chunks if c["metadata"]["h1"] == chunk["title"]]:
-                with st.expander(f"{chunk['title']}"):
-                    #chunks, chunk = render_chunk(chunks, chunk, output_name=output_name, i=chunk["title"])
-                    render_chunk(chunks, chunk, output_name=output_name, i=chunk["title"])
-                    for chunk in [c for c in level_3_chunks if c["metadata"]["h2"] == chunk["title"]]:
-                        with st.expander(f"{chunk['title']}"):
-                            #chunks, chunk = render_chunk(chunks, chunk, output_name=output_name, i=chunk["title"])
-                            render_chunk(chunks, chunk, output_name=output_name, i=chunk["title"])
+                action_cols = st.columns([1, 1, 8])
+                if action_cols[0].button("Save Chunk Changes", key=f"save_md_chunker_{unique_key}"):
+                    current_df = st.session_state.chunk_dfs[output_name]
+                    updated_df = current_df.with_columns(
+                        pl.when(pl.col("chunk_id") == row['chunk_id'])
+                        .then(pl.lit(edited_text))
+                        .otherwise(pl.col(DatabaseKeys.KEY_TXT))
+                        .alias(DatabaseKeys.KEY_TXT)
+                    )
+                    st.session_state.chunk_dfs[output_name] = updated_df
+                    st.session_state[f"edit_mode_{unique_key}"] = False # Exit edit mode
+                    st.rerun()
+                if action_cols[1].button("Delete Chunk", key=f"delete_md_chunker_{unique_key}"):
+                    current_df = st.session_state.chunk_dfs[output_name]
+                    updated_df = current_df.filter(pl.col("chunk_id") != row['chunk_id'])
+                    st.session_state.chunk_dfs[output_name] = updated_df
+                    st.rerun()
 
-    return chunks
+            with cols_text[1]:
+                st.markdown(edited_text)
+        else: # In view mode
+            st.markdown(row[DatabaseKeys.KEY_TXT])
 
+    # Hierarchy rendering using DataFrame filters
+    level_1_df = chunks_df.filter(pl.col(DatabaseKeys.KEY_METADATA).struct.field("level") == 1)
+    level_2_df = chunks_df.filter(pl.col(DatabaseKeys.KEY_METADATA).struct.field("level") == 2)
+    level_3_df = chunks_df.filter(pl.col(DatabaseKeys.KEY_METADATA).struct.field("level") == 3)
+
+    for l1_row in level_1_df.to_dicts():
+        with st.expander(f"{l1_row[DatabaseKeys.KEY_TITLE]}"):
+            render_chunk(l1_row)
+            l2_children = level_2_df.filter(pl.col(DatabaseKeys.KEY_METADATA).struct.field("h1") == l1_row[DatabaseKeys.KEY_TITLE])
+            for l2_row in l2_children.to_dicts():
+                with st.expander(f"{l2_row[DatabaseKeys.KEY_TITLE]}"):
+                    render_chunk(l2_row)
+                    l3_children = level_3_df.filter(pl.col(DatabaseKeys.KEY_METADATA).struct.field("h2") == l2_row[DatabaseKeys.KEY_TITLE])
+                    for l3_row in l3_children.to_dicts():
+                        with st.expander(f"{l3_row[DatabaseKeys.KEY_TITLE]}"):
+                            render_chunk(l3_row)
 
 def markdown_chunker() -> None:
     """
     Second level processing step:
-
     1. Inspect preprocessed markdown chunks
         - allows manual editing
     2. Render hierarchy
     3. Store chunks to Parquet files for RAG ingestion.
     """
-    _,center, _ = st.columns([1,8,1])
-
+    _, center, _ = st.columns([1, 8, 1])
     directory_preprocessed_output = os.listdir(DIRECTORY_MD_PREPROCESSING_1)
 
+    # Initialize session state for holding DataFrames
+    if 'chunk_dfs' not in st.session_state:
+        st.session_state.chunk_dfs = {}
+
     with center:
-
         for output_name in directory_preprocessed_output:
-
             md_filepath = f"{DIRECTORY_MD_PREPROCESSING_1}/{output_name}/{output_name}.md"
 
-            if output_name not in st.session_state.parsed_outputs:
-                with open(md_filepath, "r") as f:
-                    md_content = f.read()
-                    chunks = parse_markdown_to_chunks(md_content)
-
-                st.session_state.parsed_outputs.append(output_name) # Sets entry condition to false to avoid re-parsing
+            # Parse and store DataFrame in session state on first run for this file
+            if output_name not in st.session_state.chunk_dfs:
+                st.session_state.chunk_dfs[output_name] = parse_markdown_to_chunks(md_filepath)
 
             with st.expander(output_name):
-
                 if st.button("Store chunks to Parquet", key=f"store_md_chunks_{output_name}", type="primary"):
-                    titles = [chunk['title'] for chunk in chunks]
-                    contents = [chunk['content'] for chunk in chunks]
-                    metadata = [chunk['metadata'] for chunk in chunks]
+                    # On button click, write the current state of the DataFrame to Parquet
+                    # Drop the temporary 'chunk_id' if it exists before saving
+                    df_to_save = st.session_state.chunk_dfs[output_name]
+                    if "chunk_id" in df_to_save.columns:
+                        df_to_save = df_to_save.drop("chunk_id")
+                    df_to_save.write_parquet(f"{DIRECTORY_RAG_INPUT}/{output_name}/chunked_{output_name}.parquet")
 
-                    chunked_dataframe = pl.DataFrame(
-
-                        {
-                            DatabaseKeys.KEY_TITLE: titles,
-                            DatabaseKeys.KEY_TXT: contents,
-                            DatabaseKeys.KEY_METADATA: metadata,
-                        }
-                    )
-                    chunked_dataframe.write_parquet(f"{DIRECTORY_RAG_INPUT}/{output_name}/chunked_{output_name}.parquet")
-
-                chunks = render_chunks(chunks=chunks, output_name=output_name)
+                # Render the interactive chunk editor, which operates on session_state directly
+                render_chunks(output_name=output_name)
 
 if __name__ == "__main__":
     init_session_state()
