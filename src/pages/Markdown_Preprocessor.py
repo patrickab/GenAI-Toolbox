@@ -12,13 +12,14 @@ def init_session_state() -> None:
     """Initialize session state variables for the Markdown Preprocessor."""
     if "edited_markdown_files" not in st.session_state:
         st.session_state.moved_outputs = []
+        st.session_state.parsed_outputs = []
 
 def fix_heading_levels(infile: iter, outfile: iter) -> None:
     """
     Streams file line-by-line to maintain O(1) memory usage regardless of file size.
     Uses regex to robustly identify variable-depth decimal numbering (e.g., '1.2.3')
     that simple string splitting cannot reliably distinguish from heading text.
-    """    
+    """
     # Regex explanation:
     # ^#\s+          : Matches a line starting with one hash and whitespace
     # (?P<nums>...)  : Captures the numbering group
@@ -132,12 +133,119 @@ def markdown_preprocessor() -> None:
                     st.markdown(edited_text)
 
                 with cols_spacer[0]:
-                    if st.button("Save Changes", key=f"save_md_{output}"):
+                    if st.button("Save Changes", key=f"save_md_preprocessor_{output}"):
+                        # Replace edited content back to file
                         with open(md_filepath, "w") as f:
                             f.write(edited_text)
                         st.success(f"Saved changes to {md_filepath}")
 
+def parse_markdown_to_chunks(markdown_text: str) -> list[dict]:
+    lines = markdown_text.split('\n')
+
+    # State tracking
+    current_h1 = "General"
+    current_h2 = "General"
+    current_h3 = "General"
+
+    chunks = []
+    current_buffer = []
+
+    def save_chunk() -> None:
+        if not current_buffer:
+            return
+
+        text_content = "\n".join(current_buffer).strip()
+        if not text_content:
+            return
+
+        # Determine the most specific title for the chunk
+        if current_h3 != "General":
+            title = current_h3
+        elif current_h2 != "General":
+            title = current_h2
+        else:
+            title = current_h1
+
+        # Create the comprehensive context string for the embedding
+        context_string = f"{current_h1} > {current_h2} > {current_h3}"
+
+        # This is the object you send to your embedding function
+        chunk_record = {
+            "content": text_content,
+            "title": title,
+            "metadata": {
+                "h1": current_h1,
+                "h2": current_h2,
+                "h3": current_h3,
+                "context_path": context_string
+            },
+            # "embedding_text": f"{context_string}\n\n{text_content}" # Optional: Prepend context for better vectors
+        }
+        chunks.append(chunk_record)
+
+    for line in lines:
+        # Detect Headers
+        if line.startswith("# "):
+            save_chunk() # Save whatever we had before this new chapter
+            current_buffer = [] 
+            current_h1 = line.strip().replace("# ", "")
+            current_h2 = "General" # Reset lower levels
+            current_h3 = "General"
+
+        elif line.startswith("## "):
+            save_chunk()
+            current_buffer = []
+            current_h2 = line.strip().replace("## ", "")
+            current_h3 = "General" # Reset lower levels
+
+        elif line.startswith("### "):
+            save_chunk()
+            current_buffer = []
+            current_h3 = line.strip().replace("### ", "")
+        else:
+            current_buffer.append(line)
+
+    # Save the final buffer
+    save_chunk()
+
+    return chunks
+
+def markdown_chunker() -> None:
+    """Inspect preprocessed markdown chunks."""
+    _,center, _ = st.columns([1,8,1])
+
+    directory_preprocessed_output = os.listdir(DIRECTORY_RAG_INPUT)
+
+    with center:
+
+        for output in directory_preprocessed_output:
+
+            md_filepath = f"{DIRECTORY_RAG_INPUT}/{output}/{output}.md"
+
+            if output not in st.session_state.parsed_outputs:
+                with open(md_filepath, "r") as f:
+                    md_content = f.read()
+                    chunks = parse_markdown_to_chunks(md_content)
+                st.session_state.parsed_outputs.append(output)
+
+            with st.expander(output):
+
+                for i, chunk in enumerate(chunks[:100], start=1):
+
+                    with st.expander(f"{chunk['title']}", expanded=False):
+
+                        cols_buttons = st.columns([1,1,8])
+                        cols_text = st.columns([1,1])
+
+                        with cols_text[0]:
+                            edited_text = editor(language="latex", text_to_edit=chunk['content'], key=f"editor_{output}_{i}") # noqa
+                        with cols_text[1]:
+                            st.markdown(edited_text)
 
 if __name__ == "__main__":
     init_session_state()
-    markdown_preprocessor()
+    selection = st.sidebar.radio("Select Page", options=["Markdown Preprocessor", "Markdown Chunker", "Fufu"], index=0, key="markdown_page_selector")  # noqa
+    if selection == "Markdown Preprocessor":
+        markdown_preprocessor()
+    elif selection == "Markdown Chunker":
+        markdown_chunker()
