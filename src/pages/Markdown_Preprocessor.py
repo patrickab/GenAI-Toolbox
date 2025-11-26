@@ -231,6 +231,21 @@ def markdown_chunker() -> None:
                     chunks = parse_markdown_to_chunks(md_content)
                 st.session_state.parsed_outputs.append(output)
 
+            if st.button(f"Store {output}"):
+                titles = [chunk['title'] for chunk in chunks]
+                contents = [chunk['content'] for chunk in chunks]
+                metadata = [chunk['metadata'] for chunk in chunks]
+
+                chunked_dataframe = pl.DataFrame(
+
+                    {
+                        DatabaseKeys.KEY_TITLE: titles,
+                        DatabaseKeys.KEY_TXT: contents,
+                        DatabaseKeys.KEY_METADATA: metadata,
+                    }
+                )
+                chunked_dataframe.write_parquet(f"{DIRECTORY_RAG_INPUT}/{output}/chunked_{output}.parquet")
+
             with st.expander(output):
 
                 for i, chunk in enumerate(chunks[:100], start=1):
@@ -244,6 +259,14 @@ def markdown_chunker() -> None:
                             edited_text = editor(language="latex", text_to_edit=chunk['content'], key=f"editor_{output}_{i}") # noqa
                         with cols_text[1]:
                             st.markdown(edited_text)
+
+                        if cols_buttons[0].button("Save Chunk Changes", key=f"save_md_chunker_{output}_{i}"):
+                            chunks[i-1]['content'] = edited_text
+                            st.success(f"Saved changes to {md_filepath}")
+                            st.rerun()
+                        if cols_buttons[1].button("Delete Chunk", key=f"delete_md_chunker_{output}_{i}"):
+                            chunks.remove(chunk)
+                            st.rerun()
 
 if __name__ == "__main__":
     init_session_state()
