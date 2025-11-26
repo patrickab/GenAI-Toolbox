@@ -10,6 +10,7 @@ SERVER_APP_RAG_INPUT = SERVER_APP_STATIC_DIR + "/rag_input" # path used for file
 DIRECTORY_OBSIDIAN_VAULT = "/home/noob/Nextcloud/obsidian"
 DIRECTORY_CHAT_HISTORIES = "./chat_histories"
 DIRECTORY_VLM_OUTPUT = SERVER_STATIC_DIR + "/minerU_output" # VLM data miner output location
+DIRECTORY_MD_PREPROCESSING_1 = SERVER_STATIC_DIR + "/md_preprocessing_1" # preprocessed markdown files location
 DIRECTORY_RAG_INPUT = SERVER_STATIC_DIR + "/rag_input" # prepared markdown files for RAG embeddings
 
 # Adjust to your preferred models

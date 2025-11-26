@@ -1,12 +1,16 @@
 import os
-import re
 import subprocess
 
 import polars as pl
 from rag_database.rag_config import DatabaseKeys
 import streamlit as st
 
-from src.config import DIRECTORY_RAG_INPUT, DIRECTORY_VLM_OUTPUT, SERVER_APP_RAG_INPUT
+from src.config import (
+    DIRECTORY_MD_PREPROCESSING_1,
+    DIRECTORY_RAG_INPUT,
+    DIRECTORY_VLM_OUTPUT,
+    SERVER_APP_RAG_INPUT,
+)
 from src.lib.streamlit_helper import editor
 
 
@@ -17,96 +21,67 @@ def init_session_state() -> None:
         st.session_state.parsed_outputs = []
 
 
+# ---------------------------- Preprocessing Step 1 - Move Paths / Fix Headings / Adjust MD Image Paths ---------------------------- #
 def data_wrangler(vlm_output: list[str]) -> None:
     """
-    1. Move VLM output_name files to RAG input directory.
-    2. Fix image paths in markdown files.
-    3. Fix heading levels in markdown files. 
-        - # x.x -> ## x.x
-        - # x.x.x -> ### x.x.x
+    Copies and processes VLM output files. For each file, it:
+    1. Copies the markdown file and its images to DIRECTORY_MD_PREPROCESSING_1.
+    2. Adjusts image paths in the copied markdown file to be server-accessible.
+    3. Corrects heading levels in the same file:
+        - '# 1.2 Title' -> '## 1.2 Title'
+        - '# Title'     -> '**Title**'
     """
-
-    def fix_heading_levels(infile: iter, outfile: iter) -> None:
-        """
-        Streams file line-by-line to maintain O(1) memory usage regardless of file size.
-        Uses regex to robustly identify variable-depth decimal numbering (e.g., '1.2.3')
-        that simple string splitting cannot reliably distinguish from heading text.
-        """
-        # Regex explanation:
-        # ^#\s+          : Matches a line starting with one hash and whitespace
-        # (?P<nums>...)  : Captures the numbering group
-        # \d+            : Starts with digits
-        # (?:\.\d+)*     : Followed by zero or more groups of (.digits)
-
-        # Rest of line is purposefully not matched for efficiency.
-        # Only numbering pattern at linestart is relevant.
-        pattern = re.compile(r'^#\s+(?P<nums>\d+(?:\.\d+)*)')
-
-        for line in infile:
-            # Only check lines that actually start with "# " to save regex time
-            if line.startswith('# '):
-                match = pattern.match(line)
-                if match:
-                    numbering = match.group('nums')
-
-                    # Calculate level based on dots. 
-                    # "1" -> 0 dots -> Level 1
-                    # "1.1" -> 1 dot -> Level 2
-                    # "1.1.1" -> 2 dots -> Level 3
-                    # We strip trailing dots just in case "1.1." appears
-                    level = numbering.strip('.').count('.') + 1
-
-                    # Cap the level at 6 (Standard Markdown limit), 
-                    # though you can remove this if your specific dialect supports deeper nesting.
-                    level = min(level, 6)
-
-                    # Replace the single '#' with the correct number of '#'
-                    # We use line[1:] to keep the original spacing and text
-                    new_line = ('#' * level) + line[1:]
-                    outfile.write(new_line)
-                else:
-                    # Starts with # but no number pattern found (e.g., "# Introduction")
-                    # # Text -> no dots -> no heading
-                    line = line.replace('#', '', 1)
-                    # remove leading space & trailing \n
-                    line = line.lstrip().rstrip('\n') + '\n'
-                    line = "**" + line + "**"  # Bold the text instead
-                    outfile.write(line)
-            else:
-                # Not a heading line
-                outfile.write(line)
-
     for output_name in vlm_output:
-        # Construct paths
+        # 1. Set up paths and copy files
         content_path = f"./{DIRECTORY_VLM_OUTPUT}/converted_{output_name}.pdf/{output_name}/auto"
-        contents = os.listdir(content_path)
+        dest_path = f"./{DIRECTORY_MD_PREPROCESSING_1}/{output_name}"
 
-        # Identify file locations & copy to RAG input directory
+        contents = os.listdir(content_path)
         md_file = next(f for f in contents if f.endswith(".md"))
         md_filepath = f"{content_path}/{md_file}"
-        imgs_path = content_path + "/images"
-        os.makedirs(f"{DIRECTORY_RAG_INPUT}/{output_name}", exist_ok=True)
-        subprocess.run(["cp", "-r", md_filepath, imgs_path, f"./{DIRECTORY_RAG_INPUT}/{output_name}"], check=True)
+        imgs_path = f"{content_path}/images"
 
-        # Convert ![](/images/<img-filename>) to ![](){DIRECTORY_RAG_INPUT/images/<img-filename>} image paths
-        with open(f"{DIRECTORY_RAG_INPUT}/{output_name}/{md_file}", "r") as f:
-            md_content = f.read()
-            md_content = md_content.replace("![](images", f"![]({SERVER_APP_RAG_INPUT}/{output_name}/images")
-            with open(f"{DIRECTORY_RAG_INPUT}/{output_name}/{md_file}", "w") as f:
-                f.write(md_content)
+        os.makedirs(dest_path, exist_ok=True)
+        subprocess.run(["cp", "-r", md_filepath, imgs_path, dest_path], check=True)
 
-        # Create a temporary file to write the fixed content
-        temp_filepath = f"{content_path}/temp_{md_file}"
+        # 2. Process the copied markdown file in a single pass
+        processed_md_filepath = f"{dest_path}/{md_file}"
+        temp_filepath = f"{processed_md_filepath}.tmp"
 
-        with open(md_filepath, "r") as infile, open(temp_filepath, "w") as outfile:
-            fix_heading_levels(infile, outfile)
+        with open(processed_md_filepath, "r") as infile, open(temp_filepath, "w") as outfile:
+            for line in infile:
+                # Fix image paths
+                line = line.replace("![](images", f"![]({SERVER_APP_RAG_INPUT}/{output_name}/images")
 
-        # Replace original file with fixed file
-        os.replace(temp_filepath, md_filepath)
-        print(f"Moved and processed files for {output_name}")
+                # Fix heading levels
+                if line.startswith('# '):
+                    content = line[2:].lstrip()
+                    first_word = content.split(' ', 1)[0]
+                    numeric_part = first_word.rstrip('.')
+                    if numeric_part.replace('.', '').isdigit():
+                        level = numeric_part.count('.') + 1
+                        line = ('#' * min(level, 6)) + line[1:]
+                    else:
+                        line = f"**{content.strip()}**\n"
+                outfile.write(line)
+
+        os.replace(temp_filepath, processed_md_filepath)
+        print(f"Processed files for {output_name}")
+
 
 def markdown_preprocessor() -> None:
-    """Markdown Preprocessor for Obsidian Notes."""
+    """
+    First level processing step:
+
+    Markdown Preprocessor for Obsidian-Compatible Markdown Notes.
+    1. Datawrangling
+        - fixes heading levels
+        - adjusts image paths to fileserver paths
+        - moves VLM output files to 1st level MD preprocessing folder.
+    2. Editor & Preview
+        - Displays editor & markdown preview with images for each VLM output.
+        - Allows to make manual adjustments before saving data for 2nd level preprocessing.
+    """
     _,center, _ = st.columns([1,8,1])
     with center:
         st.title("Markdown Preprocessor")
@@ -117,19 +92,20 @@ def markdown_preprocessor() -> None:
 
         # Move files only once per session
         if st.session_state.moved_outputs == []:
+            # Process data & store DIRECTORY_MD_PREPROCESSING_1
             data_wrangler(vlm_output)
 
         # Display editor & preview
         for output_name in vlm_output:
 
-            # Update md_filepath to new location
-            contents = os.listdir(f"{DIRECTORY_RAG_INPUT}/{output_name}")
+            # Select md_filepath of datawrangler output
+            contents = os.listdir(f"{DIRECTORY_MD_PREPROCESSING_1}/{output_name}")
             md_file = next(f for f in contents if f.endswith(".md"))
-            md_filepath = f"{DIRECTORY_RAG_INPUT}/{output_name}/{md_file}"
+            md_filepath = f"{DIRECTORY_MD_PREPROCESSING_1}/{output_name}/{md_file}"
 
             with open(md_filepath, "r") as f:
                 md_content = f.read()
-                md_content = md_content[9000:] # Ignore first 9000 chars (bloat)
+                md_content = md_content[9000:] # Ignore first 9000 chars (bloat) # do not use in production
 
             with st.expander(output_name):
 
@@ -149,7 +125,20 @@ def markdown_preprocessor() -> None:
                             f.write(edited_text)
                         st.success(f"Saved changes to {md_filepath}")
 
+
+# ----------------------------- Preprocessing Step 2 - Chunking / Hierarchy / Parquet Storage ----------------------------- #
 def parse_markdown_to_chunks(markdown_text: str) -> list[dict]:
+    """
+    Helper function called in 2nd level markdown preprocessor
+    Parses markdown text into hierarchical chunks based on heading levels.
+    Each chunk is associated with its most specific heading (H1, H2, or H3).
+
+    Returns list of:
+        - chunk dictionaries with
+            - content
+            - title
+            - metadata
+    """
     lines = markdown_text.split('\n')
 
     # State tracking
@@ -301,6 +290,6 @@ if __name__ == "__main__":
     selection = st.sidebar.radio("Select Page", options=["Markdown Preprocessor", "Markdown Chunker", "Fufu"], index=0, key="markdown_page_selector")  # noqa
 
     if selection == "Markdown Preprocessor" and st.button("Perform Step 1"):
-            markdown_preprocessor()
+        markdown_preprocessor()
     elif selection == "Markdown Chunker" and st.button("Perform Step 2"):
         markdown_chunker()
