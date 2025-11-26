@@ -292,13 +292,13 @@ def markdown_chunker() -> None:
                     )
                     chunked_dataframe.write_parquet(f"{DIRECTORY_RAG_INPUT}/{output_name}/chunked_{output_name}.parquet")
 
-
                 chunks = render_chunks(chunks=chunks, output_name=output_name)
 
 if __name__ == "__main__":
     init_session_state()
     selection = st.sidebar.radio("Select Page", options=["Markdown Preprocessor", "Markdown Chunker", "Fufu"], index=0, key="markdown_page_selector")  # noqa
-    if selection == "Markdown Preprocessor":
-        markdown_preprocessor()
-    elif selection == "Markdown Chunker":
+
+    if selection == "Markdown Preprocessor" and st.button("Perform Step 1"):
+            markdown_preprocessor()
+    elif selection == "Markdown Chunker" and st.button("Perform Step 2"):
         markdown_chunker()
