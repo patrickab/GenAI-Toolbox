@@ -54,6 +54,9 @@ def fix_heading_levels(infile: iter, outfile: iter) -> None:
                 outfile.write(new_line)
             else:
                 # Starts with # but no number pattern found (e.g., "# Introduction")
+                # # Text -> no dots -> no heading
+                line = line.replace('#', '', 1)
+                line = "**" + line + "**"  # Bold the text instead
                 outfile.write(line)
         else:
             # Not a heading line
