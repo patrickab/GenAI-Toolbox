@@ -16,7 +16,6 @@ from src.config import (
     DIRECTORY_RAG_INPUT,
     DIRECTORY_VLM_OUTPUT,
     SERVER_APP_RAG_INPUT,
-    SERVER_STATIC_DIR,
 )
 from src.lib.streamlit_helper import editor
 
@@ -27,8 +26,7 @@ def init_session_state() -> None:
         st.session_state.is_data_wrangling_needed = True
         st.session_state.parsed_outputs = []
         st.session_state.preprocessor_active = False
-
-
+        st.session_state.chunker_active = False
 
 # ---------------------------- Preprocessing Step 1 - Move Paths / Fix Headings / Adjust MD Image Paths ---------------------------- #
 def data_wrangler(vlm_output: list[str]) -> None:
@@ -266,6 +264,7 @@ def render_chunks(output_name: str) -> None:
 
         # Buttons to toggle between viewing and editing mode
         toggle_cols = st.columns([1, 1, 8])
+        action_cols = st.columns([1, 1, 8])
         if toggle_cols[0].button("Edit Chunk", key=f"edit_md_chunker_{unique_key}"):
             st.session_state[f"edit_mode_{unique_key}"] = True
         if toggle_cols[1].button("Close Editor", key=f"close_md_chunker_{unique_key}"):
@@ -278,7 +277,6 @@ def render_chunks(output_name: str) -> None:
                 editor_key = f"editor_{output_name}_{row[DatabaseKeys.KEY_TITLE]}_{row['chunk_id']}"
                 edited_text = editor(language="latex", text_to_edit=row[DatabaseKeys.KEY_TXT], key=editor_key)
 
-                action_cols = st.columns([1, 1, 8])
                 if action_cols[0].button("Save Chunk Changes", key=f"save_md_chunker_{unique_key}"):
                     current_df = st.session_state.chunk_dfs[output_name]
                     updated_df = current_df.with_columns(
@@ -326,6 +324,11 @@ def markdown_chunker() -> None:
     2. Render hierarchy
     3. Store chunks to Parquet files for RAG ingestion.
     """
+
+    if st.sidebar.button("Exit Markdown Chunker"):
+        st.session_state.chunker_active = False
+        return
+
     _, center, _ = st.columns([1, 8, 1])
     directory_preprocessed_output = os.listdir(DIRECTORY_MD_PREPROCESSING_1)
 
@@ -354,6 +357,7 @@ def markdown_chunker() -> None:
                 render_chunks(output_name=output_name)
 
 if __name__ == "__main__":
+
     init_session_state()
     selection = st.sidebar.radio("Select Page", options=["Markdown Preprocessor", "Markdown Chunker", "Fufu"], index=0, key="markdown_page_selector")  # noqa
 
@@ -365,5 +369,10 @@ if __name__ == "__main__":
         if st.session_state.preprocessor_active is True:
             markdown_preprocessor()
 
-    elif selection == "Markdown Chunker" and st.button("Perform Step 2"):
-        markdown_chunker()
+    elif selection == "Markdown Chunker":
+
+        if st.button("Initialize Chunker"):
+            st.session_state.chunker_active = True
+
+        if st.session_state.chunker_active is True:
+            markdown_chunker()
