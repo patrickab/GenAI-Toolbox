@@ -2,6 +2,8 @@ import os
 import re
 import subprocess
 
+import polars as pl
+from rag_database.rag_config import DatabaseKeys
 import streamlit as st
 
 from src.config import DIRECTORY_RAG_INPUT, DIRECTORY_VLM_OUTPUT, SERVER_APP_RAG_INPUT
@@ -177,6 +179,7 @@ def parse_markdown_to_chunks(markdown_text: str) -> list[dict]:
             "content": text_content,
             "title": title,
             "metadata": {
+                "level": 3 if current_h3 != "General" else 2 if current_h2 != "General" else 1,
                 "h1": current_h1,
                 "h2": current_h2,
                 "h3": current_h3,
