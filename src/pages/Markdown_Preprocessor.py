@@ -158,9 +158,6 @@ def parse_markdown_to_chunks(markdown_text: str) -> list[dict]:
     current_buffer = []
 
     def save_chunk() -> None:
-        if not current_buffer:
-            return
-
         text_content = "\n".join(current_buffer).strip()
         if not text_content:
             return
@@ -218,61 +215,78 @@ def parse_markdown_to_chunks(markdown_text: str) -> list[dict]:
 
     return chunks
 
+def render_chunks(chunks: list[dict], output_name:str) -> None:
+
+    def render_chunk(chunks: list[dict], chunk: dict, output_name:str, i: str) -> None:
+
+        cols_buttons = st.columns([1,1,8])
+        cols_text = st.columns([1,1])
+
+        #with cols_text[0]:
+        #    edited_text = editor(language="latex", text_to_edit=chunk['content'], key=f"editor_{output_name}_{i}") # noqa
+        #with cols_text[1]:
+        #    st.markdown(edited_text)
+
+        st.markdown(chunk['content'])
+
+        #if cols_buttons[0].button("Save Chunk Changes", key=f"save_md_chunker_{output_name}_{i}"):
+        #    chunks[i-1]['content'] = edited_text
+        #    st.rerun()
+        #if cols_buttons[1].button("Delete Chunk", key=f"delete_md_chunker_{output_name}_{i}"):
+        #    chunks.remove(chunk)
+        #    st.rerun()
+
+        #return chunks, chunk
+
+    level_1 = 1
+    level_2 = 2
+    level_3 = 3
+    level_1_chunks = [c for c in chunks if c["metadata"]["level"] == level_1]
+    level_2_chunks = [c for c in chunks if c["metadata"]["level"] == level_2]
+    level_3_chunks = [c for c in chunks if c["metadata"]["level"] == level_3]
+
+    for chunk in level_1_chunks:
+        with st.expander(f"{chunk['title']}"):
+            #chunks, chunk = render_chunk(chunks, chunk, output_name=output_name, i=chunk["title"])
+            render_chunk(chunks, chunk, output_name=output_name, i=chunk["title"])
+            # while consecutive cunks of lower levels exist, render them too
+            for chunk in [c for c in level_2_chunks if c["metadata"]["h1"] == chunk["title"]]:
+                with st.expander(f"{chunk['title']}"):
+                    #chunks, chunk = render_chunk(chunks, chunk, output_name=output_name, i=chunk["title"])
+                    render_chunk(chunks, chunk, output_name=output_name, i=chunk["title"])
+                    for chunk in [c for c in level_3_chunks if c["metadata"]["h2"] == chunk["title"]]:
+                        with st.expander(f"{chunk['title']}"):
+                            #chunks, chunk = render_chunk(chunks, chunk, output_name=output_name, i=chunk["title"])
+                            render_chunk(chunks, chunk, output_name=output_name, i=chunk["title"])
+
+    return chunks
+
+
 def markdown_chunker() -> None:
-    """Inspect preprocessed markdown chunks."""
+    """
+    Second level processing step:
 
-    def render_chunks(chunks: list[dict], output_name:str) -> None:
-
-        def render_chunk(chunks: list[dict], chunk: dict, output_name:str, i: str) -> None:
-            cols_buttons = st.columns([1,1,8])
-            cols_text = st.columns([1,1])
-
-            with cols_text[0]:
-                edited_text = editor(language="latex", text_to_edit=chunk['content'], key=f"editor_{output_name}_{i}") # noqa
-            with cols_text[1]:
-                st.markdown(edited_text)
-
-            if cols_buttons[0].button("Save Chunk Changes", key=f"save_md_chunker_{output_name}_{i}"):
-                chunks[i-1]['content'] = edited_text
-                st.success(f"Saved changes to {md_filepath}")
-                st.rerun()
-            if cols_buttons[1].button("Delete Chunk", key=f"delete_md_chunker_{output_name}_{i}"):
-                chunks.remove(chunk)
-                st.rerun()
-    
-            return chunks, chunk
-
-        level_1 = 1
-        for i, chunk in enumerate([c for c in chunks if c["metadata"]["level"] == level_1], start=1):
-            with st.expander(f"{chunk['title']}"):
-                chunks, chunk = render_chunk(chunks, chunk, output_name=output_name, i=f"{level_1}_{i}")
-                # while consecutive cunks of lower levels exist, render them too
-                level_2 = 2
-                for j, chunk in enumerate([c for c in chunks if c["metadata"]["level"] == level_2 and c["metadata"]["h1"] == chunk["metadata"]["h1"]], start=1): # noqa
-                    with st.expander(f"{chunk['title']}"):
-                        chunks, chunk = render_chunk(chunks, chunk, output_name=output_name, i=f"{chunk["title"]}")
-                        level_3 = 3
-                        for k, chunk in enumerate([c for c in chunks if c["metadata"]["level"] == level_3 and c["metadata"]["h2"] == chunk["metadata"]["h2"]], start=1): # noqa
-                            with st.expander(f"{chunk['title']}"):
-                                chunks, chunk = render_chunk(chunks, chunk, output_name=output_name, i=f"{chunk["title"]}") # noqa
-
-        return chunks
-
+    1. Inspect preprocessed markdown chunks
+        - allows manual editing
+    2. Render hierarchy
+    3. Store chunks to Parquet files for RAG ingestion.
+    """
     _,center, _ = st.columns([1,8,1])
 
-    directory_preprocessed_output = os.listdir(DIRECTORY_RAG_INPUT)
+    directory_preprocessed_output = os.listdir(DIRECTORY_MD_PREPROCESSING_1)
 
     with center:
 
         for output_name in directory_preprocessed_output:
 
-            md_filepath = f"{DIRECTORY_RAG_INPUT}/{output_name}/{output_name}.md"
+            md_filepath = f"{DIRECTORY_MD_PREPROCESSING_1}/{output_name}/{output_name}.md"
 
             if output_name not in st.session_state.parsed_outputs:
                 with open(md_filepath, "r") as f:
                     md_content = f.read()
                     chunks = parse_markdown_to_chunks(md_content)
-                st.session_state.parsed_outputs.append(output_name)
+
+                st.session_state.parsed_outputs.append(output_name) # Sets entry condition to false to avoid re-parsing
 
             with st.expander(output_name):
 
