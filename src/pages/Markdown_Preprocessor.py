@@ -1,3 +1,8 @@
+"""
+NOTE TO MY SELF: Every step in this pipeline shall seperate streamlit UI & data processing logic without user interaction.
+Required for later building API endpoints for automation.
+"""
+
 import os
 import subprocess
 
