@@ -29,7 +29,7 @@ class ConsoleBuffer:
                 self.lines.append(self.current_line)
                 self.current_line = ""
             elif char == '\r':
-                # This is the "Magic": \r moves cursor to start. 
+                # \r moves cursor to start. 
                 # In this buffer logic, its treated as "wiping" the current line
                 # so the next characters overwrite it (creating loading bar effect).
                 self.current_line = ""
