@@ -10,7 +10,8 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "justMyCode": false
         },
         {
           "type": "debugpy",
@@ -22,7 +23,8 @@
             "${workspaceFolder}/src/main.py"
           ],
           "console": "integratedTerminal",
-          "envFile": "${workspaceFolder}/.env"
+          "envFile": "${workspaceFolder}/.env",
+          "justMyCode": false
         },
     ]
 }

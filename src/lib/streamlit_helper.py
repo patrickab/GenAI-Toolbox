@@ -11,16 +11,20 @@ import fitz
 import pymupdf4llm
 from st_copy import copy_button
 import streamlit as st
+from streamlit_ace import THEMES, st_ace
 from streamlit_paste_button import PasteResult, paste_image_button
 
 from src.config import (
     DIRECTORY_CHAT_HISTORIES,
     DIRECTORY_OBSIDIAN_VAULT,
+    DIRECTORY_RAG_INPUT,
+    DIRECTORY_VLM_OUTPUT,
     MODELS_GEMINI,
     MODELS_OCR_OLLAMA,
     MODELS_OLLAMA,
     MODELS_OPENAI,
     NANOTASK_MODEL,
+    SERVER_STATIC_DIR,
 )
 from src.lib.non_user_prompts import SYS_NOTE_TO_OBSIDIAN_YAML
 from src.lib.prompts import (
@@ -69,7 +73,13 @@ def init_session_state() -> None:
 
     Use for global session state variables.
     """
+    # Create static directory for serving PDFs
+    os.makedirs(SERVER_STATIC_DIR, exist_ok=True)
+    os.makedirs(DIRECTORY_VLM_OUTPUT, exist_ok=True)
+    os.makedirs(DIRECTORY_RAG_INPUT, exist_ok=True)
+
     if "client" not in st.session_state:
+        st.session_state.workspace = "main"
         st.session_state.client = LLMClient()
         st.session_state.imgs_sent = [EMPTY_PASTE_RESULT]
         st.session_state.pasted_image = EMPTY_PASTE_RESULT
@@ -82,6 +92,14 @@ def init_chat_variables() -> None:
         st.session_state.selected_prompt = next(iter(AVAILABLE_PROMPTS.keys()))
         st.session_state.system_prompts = AVAILABLE_PROMPTS
         st.session_state.usr_msg_captions = []
+
+def print_metrics(dict_metrics: dict[str,int|float], n_columns: Optional[int]=None) -> None:
+    """Print metrics in Streamlit columns."""
+    if n_columns is None:
+        n_columns = len(dict_metrics)
+    cols = st.columns(n_columns)
+    for idx, (metric_name, metric_value) in enumerate(dict_metrics.items()):
+        cols[idx % n_columns].metric(f"**{metric_name}:**", value=metric_value, border=True)
 
 def paste_img_button() -> PasteResult:
     """Handle image pasting in Streamlit app."""
@@ -118,6 +136,22 @@ def paste_img_button() -> PasteResult:
     else: # set pasted_image to None
         st.session_state.pasted_image = EMPTY_PASTE_RESULT
         return EMPTY_PASTE_RESULT
+
+def editor(text_to_edit: str, language: str, key: str) -> str:
+    """Create an ACE editor for displaying OCR extracted text."""
+    default_theme = "chaos"
+    selected_theme = st.selectbox(
+        label="Editor Theme",
+        options=THEMES,
+        index=THEMES.index(default_theme),
+        key=f"editor_theme_{key}"
+    )
+
+    line_count = text_to_edit.count("\n") + 1
+    adaptive_height = line_count*15
+    content = st_ace(value=text_to_edit, language=language, height=adaptive_height, key=f"editor_{key}", theme=selected_theme) #noqa
+    content # noqa
+    return content
 
 def default_sidebar_chat() -> None:
     """Render the default sidebar for chat applications."""
@@ -307,7 +341,6 @@ def nyan_cat_spinner() -> Iterator:
     """Display nyan cat spinner animation."""
     file_path = "assets/nyan-cat.gif"
     placeholder = st.empty()
-
 
     with open(file_path, "rb") as f:
         contents = f.read()

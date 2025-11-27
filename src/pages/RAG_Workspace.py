@@ -1,7 +1,9 @@
 import os
+from typing import Optional
 
 import polars as pl
-from rag_database.rag_config import MODEL_CONFIG, DatabaseKeys, empty_rag_schema
+from rag_database.dataclasses import RAGIngestionPayload
+from rag_database.rag_config import MODEL_CONFIG, DatabaseKeys
 from rag_database.rag_database import RagDatabase, RAGQuery
 import streamlit as st
 
@@ -43,38 +45,50 @@ def rag_sidebar() -> None:
                         st.dataframe(rag_db.vector_db.database)
                         if st.button("Store Database", key=f"store_rag_db_{label}_{model}"):
                             parquet_embeddings = f"{DIRECTORY_EMBEDDINGS}/{label}_{model}.parquet"
-                            rag_db.vector_db.to_parquet(parquet_embeddings)
+                            rag_db.vector_db.database.write_parquet(parquet_embeddings)
                             st.success(f"Stored RAG Database '{label}' to {parquet_embeddings}")
 
         st.markdown("---")
 
 @st.cache_resource
-def load_rag_database(doc_path: str, model: str, label: str) -> RagDatabase:
+def load_rag_database(doc_path: str, model: str, label: str, embedding_dimensions: Optional[int]=None) -> RagDatabase:
     """
     Initialize RAG Database with .md documents.
     Loads existing embeddings if available.
     Embed new documents & update database accordingly.
     """
+    if embedding_dimensions is None:
+        embedding_dimensions = MODEL_CONFIG[model]["dimensions"]
 
     parquet_embeddings = f"{DIRECTORY_EMBEDDINGS}/{label}_{model}.parquet"
-    if os.path.exists(parquet_embeddings): # noqa
+    if os.path.exists(parquet_embeddings):
+        # Load existing RAG database
         rag_dataframe = pl.read_parquet(parquet_embeddings)
+        rag_db = RagDatabase(model=model, database=rag_dataframe)
     else:
-        rag_dataframe = empty_rag_schema(model=model)
+        # Initialize empty RAG database
+        rag_db = RagDatabase(model=model, embedding_dimensions=embedding_dimensions)
 
-    rag_db = RagDatabase(model=model, database=rag_dataframe)
     titles = []
     texts = []
     documents = [f for f in os.listdir(doc_path) if f.endswith('.md')]
 
     for doc in documents:
-        with open(f"{doc_path}/{doc}", "r") as f:
+        with open(f"{doc_path}/{doc}", "r", encoding="utf-8") as f:
             text = f.read()
             if not rag_db.is_document_in_database(doc):
                 texts.append(text)
                 titles.append(doc)
 
-    rag_db.add_documents(titles=titles, texts=texts)
+    if titles:
+
+        metadata_template = [{} for _ in range(len(titles))]
+        payload = RAGIngestionPayload.from_lists(titles=titles, texts=texts, metadata=metadata_template)
+        kwargs = {}
+        if "gemini" in model or "gemma" in model:
+            kwargs["task_type"] = "RETRIEVAL_DOCUMENT"
+
+        rag_db.add_documents(payload=payload, **kwargs)
     return rag_db
 
 def rag_workspace_obsidian() -> None:
@@ -89,7 +103,13 @@ def rag_workspace_obsidian() -> None:
 
         rag_database = st.session_state.rag_databases[DATABASE_LABAL_OBSIDIAN][st.session_state.selected_embedding_model]
         rag_query = RAGQuery(query=rag_query, k_documents=RAG_K_DOCS)
-        rag_response = rag_database.rag_process_query(rag_query)
+
+        model = st.session_state.selected_embedding_model
+        kwargs = {}
+        if "gemini" in model or "gemma" in model:
+            kwargs["task_type"] = "RETRIEVAL_QUERY"
+
+        rag_response = rag_database.rag_process_query(rag_query, **kwargs)
 
         with st.chat_message("user"):
             st.markdown(rag_query.query)
@@ -101,7 +121,6 @@ def rag_workspace_obsidian() -> None:
                     st.markdown(doc[DatabaseKeys.KEY_TXT])
 
 if __name__ == "__main__":
-
     st.set_page_config(page_title="RAG Workspace", page_icon=":robot:", layout="wide")
     init_rag_workspace()
     rag_workspace_obsidian()

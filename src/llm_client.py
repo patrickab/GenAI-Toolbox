@@ -7,8 +7,6 @@ import subprocess
 from typing import Dict, Iterator, List, Optional, Tuple
 
 from litellm import completion
-from ollama import Client as OllamaClient
-from openai import OpenAI as VLLMClient
 from streamlit_paste_button import PasteResult
 
 from src.config import MODELS_GEMINI, MODELS_OPENAI
@@ -55,11 +53,6 @@ class LLMClient:
 
         self.messages: List[Tuple[str, str]] = [] # [role, message] - only store text for efficiency
         self.sys_prompt = ""
-
-        if API_CLIENT_INFO["is_ollama_installed"]:
-            self.ollama_client = OllamaClient(host="http://localhost:11434")
-        if API_CLIENT_INFO["is_gpu_available"]:
-            self.vllm_client = VLLMClient(base_url="http://localhost:8000")
 
     # -------------------------------- Core LLM Interaction -------------------------------- #
 
@@ -115,7 +108,7 @@ class LLMClient:
                 # Use vLLM settings
                 api_base = str(self.vllm_client.base_url)
                 custom_llm_provider = "openai" # vLLM mimics OpenAI
-            
+
             else:
                 # Use Ollama settings
                 api_base = "http://localhost:11434"

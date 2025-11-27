@@ -6,11 +6,18 @@ from src.lib.streamlit_helper import (
 )
 
 PAGES = {
-    "Select Page": [
+    "Gigachad Bot": [
         st.Page("pages/Gigachad_Bot.py"),
+    ],
+    "Workspaces": [
         st.Page("pages/RAG_Workspace.py"),
         st.Page("pages/PDF_Workspace.py"),
         st.Page("pages/OCR_Workspace.py"),
+    ],
+    "RAG Data Miner": [
+        st.Page("pages/PDF_Preprocessor.py"),
+        st.Page("pages/VLM_Markdown_Miner.py"),
+        st.Page("pages/Markdown_Preprocessor.py")
     ],
 }
 
