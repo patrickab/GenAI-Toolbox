@@ -46,17 +46,16 @@ def run_command_with_output(command_list: list[str]) -> None:
     buffer = ConsoleBuffer(max_lines=500)
 
     master_fd, slave_fd = pty.openpty()
-
-    process = subprocess.Popen(
-        command_list,
-        stdout=slave_fd,
-        stderr=slave_fd, 
-        close_fds=True,
-        text=True
-    )
-
-    os.close(slave_fd)
-
+    try:
+        process = subprocess.Popen(
+            command_list,
+            stdout=slave_fd,
+            stderr=slave_fd, 
+            close_fds=True,
+            text=True
+        )
+    finally:
+        os.close(slave_fd)
     last_update_time = 0
     last_content_hash = None
     UPDATE_INTERVAL = 0.1 
