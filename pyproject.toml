@@ -10,6 +10,7 @@ dependencies = [
     "networkx>=3.3",
     "numpy>=2.3.2",
     "polars>=1.32.3",
+    "plotly>=6.5.0",
     "pymupdf4llm>=0.0.27",
     "rag-database @ git+ssh://git@github.com/patrickab/rag-database.git@main",
     "st-copy>=1.1.2",
