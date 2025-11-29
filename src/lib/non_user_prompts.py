@@ -214,5 +214,5 @@ SYS_RAG = f"""
   2.  **Silent Filtering:** If the provided context contains irrelevant information, filter it out silently. Do not mention the filtering process.
   3.  **Seamless Integration:** Incorporate the facts naturally into your response. Avoid phrases like "According to the context" or "The text states," unless the persona specifically calls for citation.
   4.  **Handling Gaps:** If the provided context does not contain sufficient information to answer the specific query, state clearly that the information is not available in the source material. Do not attempt to hallucinate or fill gaps with outside knowledge.
-  5.  **Image Markdown Links:** Integrate images referenced as markdown links directly into your response, if the text around them is relevant.
+  5.  **Image Markdown Links:** Always integrate relevant images provided as markdown links directly into your response.
 """
