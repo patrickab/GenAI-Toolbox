@@ -15,7 +15,7 @@ from streamlit_ace import THEMES, st_ace
 from streamlit_paste_button import PasteResult, paste_image_button
 
 from src.config import (
-    DIRECTORY_CHAT_HISTORIES,
+    DIRECTORY_EMBEDDINGS,
     DIRECTORY_OBSIDIAN_VAULT,
     DIRECTORY_RAG_INPUT,
     DIRECTORY_VLM_OUTPUT,
@@ -77,21 +77,13 @@ def init_session_state() -> None:
     os.makedirs(SERVER_STATIC_DIR, exist_ok=True)
     os.makedirs(DIRECTORY_VLM_OUTPUT, exist_ok=True)
     os.makedirs(DIRECTORY_RAG_INPUT, exist_ok=True)
+    os.makedirs(DIRECTORY_EMBEDDINGS, exist_ok=True)
 
     if "client" not in st.session_state:
         st.session_state.workspace = "main"
         st.session_state.client = LLMClient()
         st.session_state.imgs_sent = [EMPTY_PASTE_RESULT]
         st.session_state.pasted_image = EMPTY_PASTE_RESULT
-
-def init_chat_variables() -> None:
-    """Initialize session state variables for chat."""
-    if "system_prompts" not in st.session_state:
-        st.session_state.file_context = ""
-        st.session_state.selected_model = AVAILABLE_LLM_MODELS[0]
-        st.session_state.selected_prompt = next(iter(AVAILABLE_PROMPTS.keys()))
-        st.session_state.system_prompts = AVAILABLE_PROMPTS
-        st.session_state.usr_msg_captions = []
 
 def print_metrics(dict_metrics: dict[str,int|float], n_columns: Optional[int]=None) -> None:
     """Print metrics in Streamlit columns."""
@@ -137,7 +129,7 @@ def paste_img_button() -> PasteResult:
         st.session_state.pasted_image = EMPTY_PASTE_RESULT
         return EMPTY_PASTE_RESULT
 
-def editor(text_to_edit: str, language: str, key: str) -> str:
+def editor(text_to_edit: str, language: str, key: str, height: int = None) -> str:
     """Create an ACE editor for displaying OCR extracted text."""
     default_theme = "chaos"
     selected_theme = st.selectbox(
@@ -148,95 +140,12 @@ def editor(text_to_edit: str, language: str, key: str) -> str:
     )
 
     line_count = text_to_edit.count("\n") + 1
-    adaptive_height = line_count*15
-    content = st_ace(value=text_to_edit, language=language, height=adaptive_height, key=f"editor_{key}", theme=selected_theme) #noqa
+    if height is None:
+        height = line_count*15
+
+    content = st_ace(value=text_to_edit, language=language, height=height, key=f"editor_{key}", theme=selected_theme) #noqa
     content # noqa
     return content
-
-def default_sidebar_chat() -> None:
-    """Render the default sidebar for chat applications."""
-    init_chat_variables()
-
-    with st.sidebar:
-
-        model = st.selectbox(
-            "Select LLM",
-            AVAILABLE_LLM_MODELS,
-            key="model_select",
-        )
-
-        sys_prompt_name = st.selectbox(
-            "System prompt",
-            list(st.session_state.system_prompts.keys()),
-            key="prompt_select",
-        )
-
-        if sys_prompt_name != st.session_state.selected_prompt:
-            st.session_state.selected_prompt = sys_prompt_name
-
-        if model != st.session_state.selected_model:
-            st.session_state.selected_model = model
-
-        # -------------------------------------------------- Options & File Upload -------------------------------------------------- #
-        st.markdown("---")
-        with st.expander("Options", expanded=False):
-            st.session_state.bool_caption_usr_msg = st.toggle("Caption User Messages", key="caption_toggle", value=False)
-            st.markdown("---")
-            if st.button("Reset History", key="reset_history_main"):
-                st.session_state.client.reset_history()
-
-            st.markdown("---")
-            file = st.file_uploader(type=["pdf", "py", "md", "cpp", "txt"], label="Upload file context (.pdf/.txt/.py)")
-            if file is not None:
-                if file.type == "application/pdf":
-                    text, _ = _extract_text_from_pdf(file)
-                else:
-                    text = file.getvalue().decode("utf-8")
-                st.session_state.file_context = text
-
-            if st.session_state.client.messages != []:
-                st.markdown("---")
-                with st.popover("Save History"):
-                    filename = st.text_input("Filename", key="history_filename_input")
-                    if st.button("Save Chat History", key="save_chat_history_button"):
-                        if not os.path.exists(DIRECTORY_CHAT_HISTORIES):
-                            os.makedirs(DIRECTORY_CHAT_HISTORIES)
-                        st.session_state.client.store_history(DIRECTORY_CHAT_HISTORIES + '/' + filename + '.csv')
-                        st.success("Successfully saved chat")
-
-        # ---------------------------------------------- Paste Image & Chat Histories ---------------------------------------------- #
-        st.markdown("---")
-        with st.expander("Upload Image"):
-
-            paste_img_button()
-
-        if os.path.exists(DIRECTORY_CHAT_HISTORIES):
-            chat_histories = [f.replace('.csv', '') for f in os.listdir(DIRECTORY_CHAT_HISTORIES) if f.endswith('.csv')]
-        else:
-            chat_histories = []
-        
-        if chat_histories != []:
-            st.markdown("---")
-            with st.expander("Chat Histories", expanded=False):
-                for history in chat_histories:
-                    with st.expander(history, expanded=False):
-                        col_load, col_delete, col_archive = st.columns(3)
-                        with col_load:
-                            if st.button("⟳", key=f"load_{history}"):
-                                st.session_state.client.load_history(os.path.join(DIRECTORY_CHAT_HISTORIES, history + '.csv'))
-                        with col_delete:
-                            if st.button("🗑", key=f"delete_{history}"):
-                                os.remove(os.path.join(DIRECTORY_CHAT_HISTORIES, history + '.csv'))
-                                st.rerun()
-                        with col_archive:
-                            if st.button("⛁", key=f"archive_{history}"):
-                                if not os.path.exists(DIRECTORY_CHAT_HISTORIES + '/archived/'):
-                                    os.makedirs(DIRECTORY_CHAT_HISTORIES + '/archived/')
-                                os.rename(
-                                    os.path.join(DIRECTORY_CHAT_HISTORIES, history + '.csv'),
-                                    os.path.join(DIRECTORY_CHAT_HISTORIES, 'archived', history + '.csv')
-                                )
-                                st.rerun()
 
 def _non_streaming_api_query(model: str, prompt: str, system_prompt: str, img:Optional[PasteResult] = EMPTY_PASTE_RESULT) -> str:
     """

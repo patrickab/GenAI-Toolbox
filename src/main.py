@@ -8,6 +8,7 @@ from src.lib.streamlit_helper import (
 PAGES = {
     "Gigachad Bot": [
         st.Page("pages/Gigachad_Bot.py"),
+        st.Page("pages/DataFrame_Bot.py")
     ],
     "Workspaces": [
         st.Page("pages/RAG_Workspace.py"),

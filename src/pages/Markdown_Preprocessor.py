@@ -198,16 +198,6 @@ METADATA_SCHEMA = {
 
 DEFAULT_HEADING = "General"
 
-def _create_empty_payload() -> RAGIngestionPayload:
-    """Creates an empty RAGIngestionPayload with the correct schema."""
-    schema = {
-        DatabaseKeys.KEY_TITLE: pl.String,
-        DatabaseKeys.KEY_TXT_RETRIEVAL: pl.String,
-        DatabaseKeys.KEY_TXT_EMBEDDING: pl.String,
-        DatabaseKeys.KEY_METADATA: pl.String,
-    }
-    return RAGIngestionPayload(df=pl.DataFrame(schema=schema))
-
 def create_ingestion_payload(markdown_filepath: str) -> RAGIngestionPayload:
     """
     Parses a Markdown file into hierarchical text chunks based on heading levels.
@@ -229,7 +219,7 @@ def create_ingestion_payload(markdown_filepath: str) -> RAGIngestionPayload:
         with open(markdown_filepath, "r", encoding="utf-8") as f:
             markdown_text = f.read()
     except FileNotFoundError:
-        return _create_empty_payload()
+        return RAGIngestionPayload.create_empty_payload()
 
     lines = markdown_text.split("\n")
     chunks = []
@@ -299,7 +289,7 @@ def create_ingestion_payload(markdown_filepath: str) -> RAGIngestionPayload:
     save_current_chunk()  # Save the final chunk after the loop
 
     if not chunks:
-        return _create_empty_payload()
+        return RAGIngestionPayload.create_empty_payload()
 
     return RAGIngestionPayload(df=pl.DataFrame(chunks))
 
