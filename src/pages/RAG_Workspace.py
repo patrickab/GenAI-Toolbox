@@ -148,9 +148,9 @@ def rag_sidebar() -> None:
         with st.expander("RAG Databases in Memory", expanded=True):
 
             for label, models_dict in st.session_state.rag_databases.items():
-                with st.expander(f"**Label**:{label}", expanded=False):
+                with st.expander(f"**Label**:{label}", expanded=True):
                     for model, rag_db in models_dict.items():
-                        with st.expander(f"**Model**:{model}", expanded=False), st.expander("Inspect Database", expanded=False):
+                        with st.expander(f"**Model**:{model}", expanded=False):
                             st.dataframe(rag_db.vector_db.database)
                             if st.button("Store Database", key=f"store_rag_db_{label}_{model}"):
                                 parquet_embeddings = f"{DIRECTORY_EMBEDDINGS}/{label}_{model}.parquet"
