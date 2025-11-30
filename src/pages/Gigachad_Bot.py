@@ -15,8 +15,7 @@ from lib.streamlit_helper import (
     options_message,
     paste_img_button,
 )
-from lib.streamlit_sidebars import init_rag_workspace
-from pages.RAG_Workspace import rag_sidebar
+from pages.RAG_Workspace import init_rag_workspace, rag_sidebar
 
 EMPTY_PASTE_RESULT = PasteResult(image_data=None)
 
