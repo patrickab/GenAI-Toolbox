@@ -30,11 +30,11 @@ def init_session_state() -> None:
         st.session_state.parsed_outputs = []
         st.session_state.preprocessor_active = False
         st.session_state.chunker_active = False
-        st.session_state.is_rag_ingestion_payload_initialized = False
-        st.session_state.is_edit_mode_active = False
+        st.session_state.is_doc_edit_mode_active = {} # per document
+        st.session_state.is_edit_mode_active = [] # per chunk
         st.session_state.staging_complete = False
+        st.session_state.is_payload_initialized = {} # boolean per document
         st.session_state.rag_ingestion_payload = {}
-        st.session_state.selected_graph_document = None
 
 # ---------------------------- Preprocessing Step 1 - Move Paths / Fix Headings / Adjust MD Image Paths ---------------------------- #
 def _transform_headings(lines: list[str]) -> list[str]:
@@ -65,7 +65,7 @@ IMAGE_PATH_PATTERN = re.compile(r"!\[(.*?)\]\(images/")
 def _process_document(doc_id: str) -> None:
     """Copies, cleans, and restructures a single document and its assets."""
     try:
-        source_base_path = Path(DIRECTORY_VLM_OUTPUT) / f"converted_{doc_id}.pdf" / doc_id / "auto"
+        source_base_path = Path(DIRECTORY_VLM_OUTPUT) / doc_id / "auto"
         dest_base_path = Path(DIRECTORY_MD_PREPROCESSING_1) / doc_id
         source_imgs_path = source_base_path / "images"
         static_imgs_dest_path = Path(DIRECTORY_RAG_INPUT) / doc_id / "images"
@@ -99,16 +99,9 @@ def _process_document(doc_id: str) -> None:
 def _get_doc_ids(source_directory: str) -> list[str]:
     """Retrieves document IDs from the VLM output directory."""
     source_path = Path(source_directory)
-
     if not source_path.is_dir():
         return []
-
-    doc_ids = [
-        path.name.replace("converted_", "").replace(".pdf", "")
-        for path in source_path.glob("converted_*.pdf")
-        if path.is_dir()
-    ]
-
+    doc_ids = [path.name for path in source_path.glob("*") if path.is_dir()]
     doc_ids = sorted(doc_ids)
     return doc_ids
 
@@ -125,6 +118,7 @@ def stage_vlm_outputs(source_directory: str) -> None:
 
     for doc_id in doc_ids:
         _process_document(doc_id)
+        st.session_state.is_doc_edit_mode_active[doc_id] = False
 
 def _render_document_editor(doc_id: str, base_path: Path) -> None:
     """Displays a markdown editor and preview for a single document."""
@@ -134,26 +128,47 @@ def _render_document_editor(doc_id: str, base_path: Path) -> None:
         st.warning(f"Markdown file for '{doc_id}' not found. Skipping.")
         return
 
-    with st.expander(doc_id):
-        original_content = md_filepath.read_text(encoding="utf-8")
-        editor_cols = st.columns(2)
-        with editor_cols[0]:
-            st.subheader("Editor")
-            edited_text = editor(
-                text_to_edit=original_content,
-                language="markdown",
-                key=f"editor_{doc_id}"
-            )
-        with editor_cols[1]:
-            st.subheader("Preview")
-            st.markdown(edited_text)
+    # Load the original content once per render
+    original_content = md_filepath.read_text(encoding="utf-8")
 
-        if st.button("Save Changes", key=f"save_{doc_id}"):
-            try:
-                md_filepath.write_text(edited_text, encoding="utf-8")
-                st.success(f"Saved changes to {md_filepath.name}")
-            except (IOError, OSError) as e:
-                st.error(f"Could not save file for '{doc_id}': {e}")
+    with st.expander(doc_id):
+
+        if st.session_state.is_doc_edit_mode_active[doc_id]:
+
+            button_col = st.columns([1, 8])
+
+            st.subheader("Editor")
+            text_cols = st.columns([1,1])
+            with text_cols[0]:
+                edited_text = editor(
+                    text_to_edit=original_content,
+                    language="markdown",
+                    key=f"editor_{doc_id}"
+                )
+            with text_cols[1]:
+                st.subheader("Preview")
+                st.markdown(edited_text, unsafe_allow_html=True)
+
+            # Check for changes and save automatically
+            if button_col[0].button("Save Changes", key=f"view_{doc_id}"):
+                st.session_state.is_doc_edit_mode_active[doc_id] = False
+
+                if edited_text != original_content:
+                    try:
+                        md_filepath.write_text(edited_text, encoding="utf-8")
+                        st.success(f"Saved changes to {md_filepath.name}")
+                        st.rerun() 
+                    except (IOError, OSError) as e:
+                        st.error(f"Could not save file for '{doc_id}': {e}")
+
+                    st.rerun()
+        else:
+            if st.button("Edit Document", key=f"edit_{doc_id}"):
+                st.session_state.is_doc_edit_mode_active[doc_id] = True
+                st.rerun()
+
+            st.subheader("Preview")
+            st.markdown(original_content, unsafe_allow_html=True)
 
 def render_preprocessor() -> None:
     """
@@ -390,20 +405,21 @@ def markdown_chunker() -> None:
         return
 
     _, center, _ = st.columns([1, 8, 1])
-    directory_preprocessed_output = os.listdir(DIRECTORY_MD_PREPROCESSING_1)
+    directory_preprocessed_output = sorted(os.listdir(DIRECTORY_MD_PREPROCESSING_1))
 
-    # Initialize session state for holding DataFrames
-    if 'rag_ingestion_payload' not in st.session_state:
-        st.session_state.rag_ingestion_payload = {}
+    # Set all payload initialization flags to False
+    if st.session_state.is_payload_initialized == {}:
+        for output_name in directory_preprocessed_output:
+            st.session_state.is_payload_initialized[output_name] = False
 
     with center:
         for output_name in directory_preprocessed_output:
             md_filepath = f"{DIRECTORY_MD_PREPROCESSING_1}/{output_name}/{output_name}.md"
 
             # Parse and store DataFrame in session state on first run for this file
-            if not st.session_state.is_rag_ingestion_payload_initialized:
+            if not st.session_state.is_payload_initialized[output_name]:
                 st.session_state.rag_ingestion_payload[output_name] = create_ingestion_payload(md_filepath)
-                st.session_state.is_rag_ingestion_payload_initialized = True
+                st.session_state.is_payload_initialized[output_name] = True
 
             with st.expander(output_name):
                 if st.button("Store chunks to Parquet", key=f"store_md_chunks_{output_name}", type="primary"):
