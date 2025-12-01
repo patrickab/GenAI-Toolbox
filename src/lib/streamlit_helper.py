@@ -28,14 +28,15 @@ from src.config import (
 )
 from src.lib.non_user_prompts import SYS_NOTE_TO_OBSIDIAN_YAML
 from src.lib.prompts import (
-    SYS_AI_TUTOR,
+    SYS_ADVISOR,
     SYS_ARTICLE,
     SYS_CONCEPT_IN_DEPTH,
     SYS_CONCEPTUAL_OVERVIEW,
     SYS_EMPTY_PROMPT,
     SYS_PRECISE_TASK_EXECUTION,
-    SYS_PROMPT_ARCHITECT,
+    SYS_PROMPT_ENGINEER,
     SYS_QUICK_OVERVIEW,
+    SYS_TUTOR,
 )
 from src.llm_client import LLMClient
 
@@ -56,11 +57,12 @@ if MODELS_OLLAMA != []:
 
 AVAILABLE_PROMPTS = {
     "Quick Overview": SYS_QUICK_OVERVIEW,
-    "AI Tutor": SYS_AI_TUTOR,
+    "Advisor": SYS_ADVISOR,
+    "Tutor": SYS_TUTOR,
     "Concept - High-Level": SYS_CONCEPTUAL_OVERVIEW,
     "Concept - In-Depth": SYS_CONCEPT_IN_DEPTH,
     "Concept - Article": SYS_ARTICLE,
-    "Prompt Architect": SYS_PROMPT_ARCHITECT,
+    "Prompt Engineer": SYS_PROMPT_ENGINEER,
     "Precise Task Execution": SYS_PRECISE_TASK_EXECUTION,
     "<empty prompt>": SYS_EMPTY_PROMPT,
 }
