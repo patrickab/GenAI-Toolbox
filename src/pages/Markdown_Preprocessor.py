@@ -20,8 +20,9 @@ from src.config import (
     DIRECTORY_VLM_OUTPUT,
     SERVER_APP_RAG_INPUT,
 )
-from src.lib.streamlit_helper import editor, model_selector
 from src.lib.prompts import SYS_LECTURE_SUMMARIZER
+from src.lib.streamlit_helper import editor, model_selector
+
 
 def init_session_state() -> None:
     """Initialize session state variables for the Markdown Preprocessor."""
