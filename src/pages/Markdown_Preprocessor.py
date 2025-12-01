@@ -326,9 +326,92 @@ def render_chunks(output_name: str) -> None:
                      `st.session_state`.
     """
     payload = st.session_state.rag_ingestion_payload[output_name]
+
     if payload.df.is_empty():
         st.info("No chunks to display.")
         return
+
+    # --- Logic for Merging Chunks (Absorbing Lowest Level) ---
+    if st.button("Merge Chunks (Absorb Lowest Level)"):
+
+        # Keep index order to sort back correctly after split
+        df = payload.df.with_row_index("index_order")
+
+        # Parse metadata to determine hierarchy levels
+        df_meta = df.with_columns(
+            pl.col(DatabaseKeys.KEY_METADATA).str.json_decode(dtype=pl.Struct(METADATA_SCHEMA)).alias("meta")
+        )
+
+        max_level = df_meta.select(pl.col("meta").struct.field("level").max()).item()
+
+        # Only proceed if we have levels deeper than 1
+        if max_level is not None and max_level > 1:
+            parent_level = max_level - 1
+
+            # Define grouping keys (e.g., if merging L3->L2, group by H1 & H2)
+            group_keys = ["h1"]
+            if parent_level == 2:
+                group_keys.append("h2")
+
+            # Partition data
+            grandparents = df_meta.filter(pl.col("meta").struct.field("level") < parent_level)
+            parents = df_meta.filter(pl.col("meta").struct.field("level") == parent_level)
+            children = df_meta.filter(pl.col("meta").struct.field("level") == max_level)
+
+            if not children.is_empty():
+                # Extract grouping keys for join
+                children_keyed = children.with_columns([
+                    pl.col("meta").struct.field(k).alias(k) for k in group_keys
+                ])
+                parents_keyed = parents.with_columns([
+                    pl.col("meta").struct.field(k).alias(k) for k in group_keys
+                ])
+
+                # Aggregate children content (sort by index to maintain document flow)
+                children_agg = (
+                    children_keyed.sort("index_order")
+                    .group_by(group_keys)
+                    .agg([
+                        pl.col(DatabaseKeys.KEY_TITLE).str.join(" > ").alias("c_titles"),
+                        pl.col(DatabaseKeys.KEY_TXT_RETRIEVAL).str.join("\n\n").alias("c_texts_retrieval"),
+                        pl.col(DatabaseKeys.KEY_TXT_EMBEDDING).str.join("\n\n").alias("c_texts_embeddings")
+                    ])
+                )
+
+                # Join parents with aggregated children and Update
+                merged_parents = parents_keyed.join(children_agg, on=group_keys, how="left").with_columns([
+                    # Append children titles
+                    pl.when(pl.col("c_titles").is_not_null())
+                      .then(pl.format("{} > {}", pl.col(DatabaseKeys.KEY_TITLE), pl.col("c_titles")))
+                      .otherwise(pl.col(DatabaseKeys.KEY_TITLE))
+                      .alias(DatabaseKeys.KEY_TITLE),
+
+                    # Append children text
+                    pl.when(pl.col("c_texts_retrieval").is_not_null())
+                      .then(pl.format("{}\n\n{}", pl.col(DatabaseKeys.KEY_TXT_RETRIEVAL), pl.col("c_texts_retrieval")))
+                      .otherwise(pl.col(DatabaseKeys.KEY_TXT_RETRIEVAL))
+                      .alias(DatabaseKeys.KEY_TXT_RETRIEVAL),
+
+                    # Append children embedding context
+                    pl.when(pl.col("c_texts_embeddings").is_not_null())
+                      .then(pl.format("{}\n\n{}", pl.col(DatabaseKeys.KEY_TXT_EMBEDDING), pl.col("c_texts_embeddings")))
+                      .otherwise(pl.col(DatabaseKeys.KEY_TXT_EMBEDDING))
+                      .alias(DatabaseKeys.KEY_TXT_EMBEDDING),
+                ])
+
+                # Reassemble the dataframe (Grandparents + Merged Parents)
+                final_df = (
+                    pl.concat([
+                        grandparents.select(df.columns),
+                        merged_parents.select(df.columns)
+                    ])
+                    .sort("index_order")
+                    .drop("index_order")
+                )
+
+                # Update State and Rerun
+                st.session_state.rag_ingestion_payload[output_name].df = final_df
+                st.rerun()
 
     # Add a unique row ID to prevent key collisions in Streamlit
     chunks_df_with_id = payload.df.with_row_index("unique_id")
