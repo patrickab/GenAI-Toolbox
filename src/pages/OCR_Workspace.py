@@ -2,18 +2,13 @@
 import streamlit as st
 
 from lib.non_user_prompts import SYS_OCR_TEXT_EXTRACTION
-from src.config import MODELS_OCR_OLLAMA
-from src.lib.streamlit_helper import EMPTY_PASTE_RESULT, editor, options_message, paste_img_button
+from src.lib.streamlit_helper import EMPTY_PASTE_RESULT, editor, model_selector, options_message, paste_img_button
 
 
 def ocr_sidebar() -> None:
     with st.sidebar:
 
-        st.session_state.selected_model_ocr = st.selectbox(
-            label="Select OCR Model",
-            options=MODELS_OCR_OLLAMA,
-            index=0,
-        )
+        st.session_state.selected_model_ocr = model_selector(key="ocr_workspace")
 
         paste_img_button()
 

@@ -5,7 +5,7 @@ import plotly.graph_objects as go # noqa
 import streamlit as st
 from llm_client import LLMClient
 import os
-from src.lib.streamlit_helper import editor, AVAILABLE_LLM_MODELS
+from src.lib.streamlit_helper import editor, model_selector
 
 
 SYS_DATAFRAME_BOT ="""
@@ -72,11 +72,7 @@ def sidebar() -> None:
     """Sidebar for DataFrame Bot page."""
     with st.sidebar:
 
-        st.session_state.selected_model = st.selectbox(
-            "Select LLM",
-            AVAILABLE_LLM_MODELS,
-            key="model_select",
-        )
+        st.session_state.selected_model = model_selector(key="dataframe_bot")
 
         st.divider()
 

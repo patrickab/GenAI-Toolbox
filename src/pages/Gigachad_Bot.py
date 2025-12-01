@@ -12,6 +12,7 @@ from lib.streamlit_helper import (
     AVAILABLE_PROMPTS,
     _extract_text_from_pdf,
     _non_streaming_api_query,
+    model_selector,
     options_message,
     paste_img_button,
 )
@@ -136,11 +137,7 @@ def gigachad_sidebar() -> None:
     with st.sidebar:
 
         #------------------------------------------------- Model & Prompt Selection ------------------------------------------------- #
-        model = st.selectbox(
-            "Select LLM",
-            AVAILABLE_LLM_MODELS,
-            key="model_select",
-        )
+        model = model_selector(key="gigachad_bot")
 
         sys_prompt_name = st.selectbox(
             "System prompt",

@@ -89,6 +89,14 @@ def init_session_state() -> None:
         st.session_state.imgs_sent = [EMPTY_PASTE_RESULT]
         st.session_state.pasted_image = EMPTY_PASTE_RESULT
 
+def model_selector(key:str) -> None:
+    """Create a model selection dropdown in Streamlit sidebar."""
+    return st.selectbox(
+        "Select LLM",
+        AVAILABLE_LLM_MODELS,
+        key=f"model_select_{key}",
+    )
+
 def print_metrics(dict_metrics: dict[str,int|float], n_columns: Optional[int]=None) -> None:
     """Print metrics in Streamlit columns."""
     if n_columns is None:
