@@ -101,7 +101,7 @@ def _get_doc_ids(source_directory: str) -> list[str]:
     source_path = Path(source_directory)
     if not source_path.is_dir():
         return []
-    doc_ids = [path.name for path in source_path.glob("*") if path.is_dir()]
+    doc_ids = [path.name for path in source_path.glob("*") if path.is_dir() and path.name != "archive"]
     doc_ids = sorted(doc_ids)
     return doc_ids
 
@@ -406,6 +406,7 @@ def markdown_chunker() -> None:
 
     _, center, _ = st.columns([1, 8, 1])
     directory_preprocessed_output = sorted(os.listdir(DIRECTORY_MD_PREPROCESSING_1))
+    directory_preprocessed_output = [dir for dir in directory_preprocessed_output if dir != "archive"]
 
     # Set all payload initialization flags to False
     if st.session_state.is_payload_initialized == {}:
