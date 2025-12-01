@@ -355,7 +355,7 @@ def render_chunks(output_name: str) -> None:
         return
 
     # --- Logic for Merging Chunks (Absorbing Lowest Level) ---
-    if st.button("Merge Chunks (Absorb Lowest Level)"):
+    if st.button("Merge Chunks (Absorb Lowest Level)", key=f"merge_chunks_{output_name}"):
         # Keep index order to sort back correctly after split
         df = payload.df.with_row_index("index_order")
 
