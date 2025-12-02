@@ -13,6 +13,7 @@ from lib.streamlit_helper import (
     AVAILABLE_PROMPTS,
     _extract_text_from_pdf,
     _non_streaming_api_query,
+    llm_params_sidebar,
     model_selector,
     options_message,
     paste_img_button,
@@ -162,28 +163,7 @@ def gigachad_sidebar() -> None:
             st.session_state.selected_model = model
 
         # ------------------------------------------------------ Model Config ------------------------------------------------------ #
-        with st.expander("Model Configuration", expanded=False):
-            st.session_state.llm_temperature = st.slider(
-                "Temperature",
-                min_value=0.0,
-                max_value=2.0,
-                value=0.2,
-                step=0.05,
-                key="temperature",
-            )
-            st.session_state.llm_top_p = st.slider(
-                "Top-p (nucleus sampling)",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.95,
-                step=0.05,
-                key="top_p",
-            )
-            st.session_state.llm_reasoning_effort = st.selectbox(
-                "Reasoning Effort",
-                options=["low", "medium", "high"],
-                key="reasoning_effort",
-            )
+        llm_params_sidebar()
 
         # -------------------------------------------------------- RAG Mode -------------------------------------------------------- #
         st.markdown("---")

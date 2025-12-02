@@ -95,6 +95,32 @@ def model_selector(key:str) -> None:
         key=f"model_select_{key}",
     )
 
+def llm_params_sidebar()-> None:
+    """Create LLM parameter sliders in Streamlit expander."""
+    with st.expander("Model Configuration", expanded=False):
+        st.session_state.llm_temperature = st.slider(
+            "Temperature",
+            min_value=0.0,
+            max_value=2.0,
+            value=0.2,
+            step=0.05,
+            key="temperature",
+        )
+        st.session_state.llm_top_p = st.slider(
+            "Top-p (nucleus sampling)",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.95,
+            step=0.05,
+            key="top_p",
+        )
+        st.session_state.llm_reasoning_effort = st.selectbox(
+            "Reasoning Effort",
+            options=["low", "medium", "high"],
+            key="reasoning_effort",
+        )
+
+
 def print_metrics(dict_metrics: dict[str,int|float], n_columns: Optional[int]=None) -> None:
     """Print metrics in Streamlit columns."""
     if n_columns is None:
