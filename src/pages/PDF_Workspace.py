@@ -5,12 +5,10 @@ import re
 import pandas as pd
 import streamlit as st
 
-from src.config import MACROTASK_MODEL, MICROTASK_MODEL
+from src.config import MACROTASK_MODEL
 from src.lib.flashcards import DATE_ADDED, NEXT_APPEARANCE, render_flashcards
 from src.lib.non_user_prompts import (
-    SYS_IMAGE_IMPORTANCE,
     SYS_LEARNINGGOALS_TO_FLASHCARDS,
-    SYS_PDF_TO_ARTICLE,
     SYS_PDF_TO_LEARNING_GOALS,
 )
 from src.lib.streamlit_helper import _extract_text_from_pdf, _non_streaming_api_query, options_message
@@ -21,18 +19,6 @@ def _generate_learning_goals(text: str) -> str:
     """Generate learning goals from PDF text."""
     print("Generating learning goals...")
     return _non_streaming_api_query(model=MACROTASK_MODEL, prompt=text, system_prompt=SYS_PDF_TO_LEARNING_GOALS)
-
-
-@st.cache_data
-def _generate_image_importance(pdf_text: str, learning_goals: str) -> str:
-    """Generate image importance from PDF text and learning goals."""
-    print("Generating image importance...")
-    response = _non_streaming_api_query(
-        model=MICROTASK_MODEL,
-        prompt="## Learning Goals\n" + learning_goals + "\n\n## PDF Content\n" + pdf_text,
-        system_prompt=SYS_IMAGE_IMPORTANCE,
-    )
-    return response
 
 @st.cache_data
 def _generate_flashcards(learning_goals: str) -> pd.DataFrame:
@@ -52,6 +38,7 @@ def _generate_flashcards(learning_goals: str) -> pd.DataFrame:
 
 @st.cache_data
 def _generate_wiki_article(pdf_text: str, learning_goals: str) -> str:  # noqa
+    # Currently unused - keep structure for future use
     print("Writing wiki article...")
     wiki_prompt = f"""
     Consider the following learning goals:
@@ -65,7 +52,7 @@ def _generate_wiki_article(pdf_text: str, learning_goals: str) -> str:  # noqa
     {pdf_text}
     """
 
-    return _non_streaming_api_query(model=MACROTASK_MODEL, prompt=wiki_prompt, system_prompt=SYS_PDF_TO_ARTICLE)
+    #return _non_streaming_api_query(model=MACROTASK_MODEL, prompt=wiki_prompt, system_prompt=SYS_PDF_TO_ARTICLE)
 
 
 def pdf_workspace() -> None:
