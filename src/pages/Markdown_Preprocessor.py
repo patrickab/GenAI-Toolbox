@@ -14,14 +14,13 @@ from rag_database.dataclasses import RAGIngestionPayload
 from rag_database.rag_config import DatabaseKeys
 import streamlit as st
 
-from lib.non_user_prompts import SYS_LECTURE_ENHENCER
+from lib.non_user_prompts import SYS_LECTURE_ENHENCER, SYS_LECTURE_SUMMARIZER
 from src.config import (
     DIRECTORY_MD_PREPROCESSING_1,
     DIRECTORY_RAG_INPUT,
     DIRECTORY_VLM_OUTPUT,
     SERVER_APP_RAG_INPUT,
 )
-from src.lib.prompts import SYS_LECTURE_SUMMARIZER
 from src.lib.streamlit_helper import editor, llm_params_sidebar, model_selector
 
 
