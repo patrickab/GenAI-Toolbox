@@ -30,8 +30,11 @@ def init_session_state() -> None:
     if "is_data_wrangling_needed" not in st.session_state:
         st.session_state.is_data_wrangling_needed = True
         st.session_state.parsed_outputs = []
+
         st.session_state.preprocessor_active = False
+        st.session_state.llm_processor_active = False
         st.session_state.chunker_active = False
+
         st.session_state.is_doc_edit_mode_active = {} # per document
         st.session_state.is_chunk_edit_mode_active = {} # per chunk
         st.session_state.staging_complete = False
@@ -248,7 +251,6 @@ def render_llm_processor() -> None:
                 try:
                     with st.spinner("LLM is enhancing the document..."):
                         user_message = (
-                            f"Enhance the following document for clarity, structure, and completeness while preserving all original information.\n"
                             f"<original content>\n{original_content}\n</original content>"
                         )
                         stream = st.session_state.client.api_query(
