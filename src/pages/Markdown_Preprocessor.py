@@ -14,6 +14,7 @@ from rag_database.dataclasses import RAGIngestionPayload
 from rag_database.rag_config import DatabaseKeys
 import streamlit as st
 
+from lib.non_user_prompts import SYS_LECTURE_ENHENCER
 from src.config import (
     DIRECTORY_MD_PREPROCESSING_1,
     DIRECTORY_RAG_INPUT,
@@ -21,7 +22,7 @@ from src.config import (
     SERVER_APP_RAG_INPUT,
 )
 from src.lib.prompts import SYS_LECTURE_SUMMARIZER
-from src.lib.streamlit_helper import editor, model_selector
+from src.lib.streamlit_helper import editor, llm_params_sidebar, model_selector
 
 
 def init_session_state() -> None:
@@ -168,6 +169,12 @@ def _render_document_editor(doc_id: str, base_path: Path) -> None:
                 st.session_state.is_doc_edit_mode_active[doc_id] = True
                 st.rerun()
 
+            llm_kwargs = {
+                "temperature": st.session_state.llm_temperature,
+                "top_p": st.session_state.llm_top_p,
+                "reasoning_effort": st.session_state.llm_reasoning_effort,
+            }
+
             lvl_1_heading = st.text_input("Provide Level 1 Heading (with number) for LLM Preprocessing", key=f"llm_heading_{doc_id}")
             if st.button("LLM Preprocess Document", key=f"llm_preprocess_{doc_id}"):
                 if not lvl_1_heading.strip():
@@ -183,6 +190,7 @@ def _render_document_editor(doc_id: str, base_path: Path) -> None:
                                 model=st.session_state.md_model,
                                 user_message=user_message,
                                 system_prompt=SYS_LECTURE_SUMMARIZER,
+                                **llm_kwargs,
                             )
                             processed_content = "".join(chunk for chunk in stream)
                         md_filepath.write_text(processed_content, encoding="utf-8")
@@ -191,6 +199,25 @@ def _render_document_editor(doc_id: str, base_path: Path) -> None:
                     except Exception as e:
                         st.error(f"An error occurred during preprocessing: {e}")
 
+            if st.button("LLM Enhance Document", key=f"llm_enhance_{doc_id}"):
+                try:
+                    with st.spinner("LLM is enhancing the document..."):
+                        user_message = (
+                            f"Enhance the following document for clarity, structure, and completeness while preserving all original information.\n"
+                            f"<original content>\n{original_content}\n</original content>"
+                        )
+                        stream = st.session_state.client.api_query(
+                            model=st.session_state.md_model,
+                            user_message=user_message,
+                            system_prompt=SYS_LECTURE_ENHENCER,
+                            **llm_kwargs,
+                        )
+                        enhanced_content = "".join(chunk for chunk in stream)
+                    md_filepath.write_text(enhanced_content, encoding="utf-8")
+                    st.success(f"Document '{doc_id}' enhanced and saved.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"An error occurred during enhancement: {e}")
 
             st.subheader("Preview")
             st.markdown(original_content, unsafe_allow_html=True)
@@ -560,6 +587,8 @@ def main() -> None:
     init_session_state()
     with st.sidebar:
         st.session_state.md_model = model_selector(key="markdown_preprocessor")
+        llm_params_sidebar()
+        st.markdown("---")
         selection = st.radio("Select Page", options=["Markdown Preprocessor", "Markdown Chunker"], index=0, key="markdown_page_selector")  # noqa
 
     _, center, _ = st.columns([1, 8, 1])
