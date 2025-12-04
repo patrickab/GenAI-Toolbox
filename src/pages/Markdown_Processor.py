@@ -143,11 +143,6 @@ def _render_document_editor(doc_id: str, base_path: Path) -> None:
         st.session_state[f"padding_width_{doc_id}"] = len(str(len(st.session_state[f"md_images_{doc_id}"])))
         st.session_state[f"n_kept_images_{doc_id}"] = 0
 
-    if st.button("Save Document", key=f"save_doc_{doc_id}"):
-        md_filepath.write_text(st.session_state[f"md_content_{doc_id}"], encoding="utf-8")
-        st.success(f"Saved changes to {md_filepath.name}")
-        st.rerun()
-
     selection = st.radio("Select Mode", options=["Image Review", "Document Edit/Preview"], key=f"doc_mode_{doc_id}")
     original_content = st.session_state[f"md_content_{doc_id}"]
 
@@ -176,6 +171,7 @@ def _render_document_editor(doc_id: str, base_path: Path) -> None:
                         new_md_link = current_md_link.replace(old_path.name, new_filename)
                         st.session_state[f"md_content_{doc_id}"] = st.session_state[f"md_content_{doc_id}"].replace(current_md_link, new_md_link) # noqa
 
+                    md_filepath.write_text(st.session_state[f"md_content_{doc_id}"], encoding="utf-8")
                     st.rerun()
 
             with col_buttons[1]:
@@ -190,6 +186,7 @@ def _render_document_editor(doc_id: str, base_path: Path) -> None:
                         img_filename = Path(match.group(1)).name
                         (static_imgs_dest_path / img_filename).unlink(missing_ok=True)
 
+                    md_filepath.write_text(st.session_state[f"md_content_{doc_id}"], encoding="utf-8")
                     st.rerun()
 
             st.markdown(md_images[0])
@@ -228,6 +225,7 @@ def _render_document_editor(doc_id: str, base_path: Path) -> None:
 
             # Check for changes and save automatically
             if button_col[0].button("Exit Edit Mode", key=f"view_{doc_id}"):
+                md_filepath.write_text(st.session_state[f"md_content_{doc_id}"], encoding="utf-8")
                 st.session_state.is_doc_edit_mode_active[doc_id] = False
 
 def render_preprocessor() -> None:
