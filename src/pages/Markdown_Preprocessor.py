@@ -66,7 +66,7 @@ def _transform_headings(lines: list[str]) -> list[str]:
 
 IMAGE_PATH_PATTERN_SERVER = re.compile(r"!\[(.*?)\]\(images/") # used for mapping image paths to server URLs
 
-def _process_document(doc_id: str) -> None:
+def _preprocess_document(doc_id: str) -> None:
     """Copies, cleans, and restructures a single document and its assets."""
     try:
         source_base_path = Path(DIRECTORY_VLM_OUTPUT) / doc_id / doc_id / "auto"
@@ -119,7 +119,7 @@ def stage_vlm_outputs(source_directory: str) -> None:
     doc_ids = _get_doc_ids(source_directory)
 
     for doc_id in doc_ids:
-        _process_document(doc_id)
+        _preprocess_document(doc_id)
         st.session_state.is_doc_edit_mode_active[doc_id] = False
 
 IMAGE_LINK_PATTERN_MD = re.compile(r"!\[.*?\]\s*\((?:.*?)\)") # used for extracting complete markdown image links
