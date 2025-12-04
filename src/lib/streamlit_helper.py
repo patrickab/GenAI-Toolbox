@@ -16,6 +16,7 @@ from streamlit_paste_button import PasteResult, paste_image_button
 
 from src.config import (
     DIRECTORY_EMBEDDINGS,
+    DIRECTORY_LLM_PREPROCESSING,
     DIRECTORY_OBSIDIAN_VAULT,
     DIRECTORY_RAG_INPUT,
     DIRECTORY_VLM_OUTPUT,
@@ -80,6 +81,7 @@ def init_session_state() -> None:
     os.makedirs(DIRECTORY_VLM_OUTPUT, exist_ok=True)
     os.makedirs(DIRECTORY_RAG_INPUT, exist_ok=True)
     os.makedirs(DIRECTORY_EMBEDDINGS, exist_ok=True)
+    os.makedirs(DIRECTORY_LLM_PREPROCESSING, exist_ok=True)
 
     if "client" not in st.session_state:
         st.session_state.workspace = "main"
