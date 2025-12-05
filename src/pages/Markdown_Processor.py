@@ -283,6 +283,11 @@ def render_llm_preprocessor() -> None:
     }
     lvl_1_heading = st.text_input("Provide Level 1 Heading (with number) for LLM Preprocessing", key=f"llm_heading_{selected_document}") # noqa
 
+    if st.button("Reset Document to Preprocessed Markdown", key=f"reset_llm_{selected_document}"):
+        shutil.copy(source_md_filepath, md_filepath)
+        st.success(f"Document '{selected_document}' reset to original markdown.")
+        st.rerun()
+
     if st.button("LLM Preprocess Document", key=f"llm_preprocess_{selected_document}"):
         user_message = (
             f"Enhance the following document for clarity, structure, and completeness while preserving all original information\n" # noqa
