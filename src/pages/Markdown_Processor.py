@@ -629,9 +629,16 @@ def markdown_chunker() -> None:
         st.session_state.chunker_active = False
         return
 
+    selected_origin = st.radio("Select Markdown Source", options=["LLM Preprocessed", "Markdown Preprocessed"], key="md_chunker_source_selector")  # noqa
+
     _, center, _ = st.columns([1, 8, 1])
-    directories_preprocessed_output = sorted(os.listdir(DIRECTORY_MD_PREPROCESSING))
-    directories_preprocessed_output = [dir for dir in directories_preprocessed_output if dir != "archive"]
+
+    if selected_origin == "LLM Preprocessed":
+        directories_preprocessed_output = sorted(os.listdir(DIRECTORY_LLM_PREPROCESSING))
+        directories_preprocessed_output = [dir for dir in directories_preprocessed_output if dir != "archive"]
+    else:
+        directories_preprocessed_output = sorted(os.listdir(DIRECTORY_MD_PREPROCESSING))
+        directories_preprocessed_output = [dir for dir in directories_preprocessed_output if dir != "archive"]
 
     # Set all payload initialization flags to False
     if st.session_state.is_payload_initialized == {}:
