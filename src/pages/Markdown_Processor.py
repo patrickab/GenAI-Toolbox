@@ -30,6 +30,7 @@ def init_session_state() -> None:
         st.session_state.preprocessor_active = False
         st.session_state.llm_preprocessor_active = False
         st.session_state.chunker_active = False
+        st.session_state.is_md_merger_active = False
 
         st.session_state.is_doc_edit_mode_active = {} # per document
         st.session_state.is_chunk_edit_mode_active = {} # per chunk
@@ -110,6 +111,10 @@ def _get_doc_ids(source_directory: str) -> list[str]:
     doc_ids = [path.name for path in source_path.glob("*") if path.is_dir() and path.name != "archive"]
     doc_ids = sorted(doc_ids)
     return doc_ids
+
+def _get_doc_paths(base_dir: str) -> list[str]:
+    subdirs = _get_doc_ids(base_dir)
+    return [f"{base_dir}/{d}/{d}.md" for d in subdirs]
 
 def stage_vlm_outputs(source_directory: str) -> None:
     """
@@ -635,18 +640,31 @@ def markdown_chunker() -> None:
         st.session_state.chunker_active = False
         return
 
-    selected_origin = st.radio("Select Markdown Source", options=["LLM Preprocessed", "Markdown Preprocessed"], key="md_chunker_source_selector")  # noqa
 
     _, center, _ = st.columns([1, 8, 1])
 
-    if selected_origin == "LLM Preprocessed":
-        directories_preprocessed_output = sorted(os.listdir(DIRECTORY_LLM_PREPROCESSING))
-        directories_preprocessed_output = [dir for dir in directories_preprocessed_output if dir != "archive"]
-        SOURCE = DIRECTORY_LLM_PREPROCESSING
-    else:
-        directories_preprocessed_output = sorted(os.listdir(DIRECTORY_MD_PREPROCESSING))
-        directories_preprocessed_output = [dir for dir in directories_preprocessed_output if dir != "archive"]
-        SOURCE = DIRECTORY_MD_PREPROCESSING
+    with center:
+
+        if not st.session_state.is_md_merger_active:
+            if st.button("Activate Markdown Merger"):
+                st.session_state.is_md_merger_active = True
+                st.rerun()
+        else:
+            if st.button("Deactivate Markdown Merger"):
+                st.session_state.is_md_merger_active = False
+                st.rerun()
+
+        if not st.session_state.is_md_merger_active:
+            selected_origin = st.radio("Select Markdown Source", options=["LLM Preprocessed", "Markdown Preprocessed"], key="md_chunker_source_selector")  # noqa
+
+            if selected_origin == "LLM Preprocessed":
+                directories_preprocessed_output = sorted(os.listdir(DIRECTORY_LLM_PREPROCESSING))
+                directories_preprocessed_output = [dir for dir in directories_preprocessed_output if dir != "archive"]
+                SOURCE = DIRECTORY_LLM_PREPROCESSING
+            else:
+                directories_preprocessed_output = sorted(os.listdir(DIRECTORY_MD_PREPROCESSING))
+                directories_preprocessed_output = [dir for dir in directories_preprocessed_output if dir != "archive"]
+                SOURCE = DIRECTORY_MD_PREPROCESSING
 
     # Set all payload initialization flags to False
     if st.session_state.is_payload_initialized == {}:
@@ -654,23 +672,63 @@ def markdown_chunker() -> None:
             st.session_state.is_payload_initialized[output_name] = False
 
     with center:
-        selected_output = st.selectbox("Select Document to Chunk/Edit", options=directories_preprocessed_output)
-        md_filepath = f"{SOURCE}/{selected_output}/{selected_output}.md"
+        if not st.session_state.is_md_merger_active:
+            selected_output = st.selectbox("Select Document to Chunk/Edit", options=directories_preprocessed_output)
+            md_filepath = f"{SOURCE}/{selected_output}/{selected_output}.md"
 
-        # Parse and store DataFrame in session state on first run for this file
-        if not st.session_state.is_payload_initialized[selected_output]:
-            st.session_state.rag_ingestion_payload[selected_output] = create_ingestion_payload(md_filepath)
-            st.session_state.is_payload_initialized[selected_output] = True
+            # Parse and store DataFrame in session state on first run for this file
+            if not st.session_state.is_payload_initialized[selected_output]:
+                st.session_state.rag_ingestion_payload[selected_output] = create_ingestion_payload(md_filepath)
+                st.session_state.is_payload_initialized[selected_output] = True
 
-        if st.button("Store chunks to Parquet", key=f"store_md_chunks_{selected_output}", type="primary"):
-            payload = st.session_state.rag_ingestion_payload[selected_output]
-            save_payload = RAGIngestionPayload(df=payload.df)
-            save_payload.to_parquet(pathlib.Path(f"{DIRECTORY_RAG_INPUT}/{selected_output}/{selected_output}_ingestion_payload.parquet"))
-            st.success(f"Stored chunked data for '{selected_output}' to Parquet.")
+            if st.button("Store chunks to Parquet", key=f"store_md_chunks_{selected_output}", type="primary"):
+                payload = st.session_state.rag_ingestion_payload[selected_output]
+                save_payload = RAGIngestionPayload(df=payload.df)
+                save_payload.to_parquet(pathlib.Path(f"{DIRECTORY_RAG_INPUT}/{selected_output}/{selected_output}_ingestion_payload.parquet"))
+                st.success(f"Stored chunked data for '{selected_output}' to Parquet.")
 
-        # Render the interactive chunk editor, which operates on session_state directly
-        render_chunks(output_name=selected_output)
+            # Render the interactive chunk editor, which operates on session_state directly
+            render_chunks(output_name=selected_output)
+        else:
+            llm_mds = _get_doc_paths(DIRECTORY_LLM_PREPROCESSING)
+            selected_docs = st.multiselect("Select documents to merge", options=llm_mds)
 
+            merge_option = st.radio("Merge Option", ("Create New Directory", "Merge into Existing Directory"))
+
+            target_dir_name = ""
+            if merge_option == "Create New Directory":
+                target_dir_name = st.text_input("Enter Name for New Directory")
+            else:
+                existing_dirs = _get_doc_ids(DIRECTORY_LLM_PREPROCESSING)
+                target_dir_name = st.selectbox("Select Existing Directory", options=existing_dirs)
+
+            if st.button("Merge Documents") and target_dir_name and selected_docs:
+                new_content_list = []
+                for path in selected_docs:
+                    try:
+                        new_content_list.append(Path(path).read_text(encoding="utf-8"))
+                    except FileNotFoundError:
+                        st.warning(f"File not found, skipping: {path}")
+
+                if new_content_list:
+                    merged_dir = Path(DIRECTORY_LLM_PREPROCESSING) / target_dir_name
+                    merged_md_path = merged_dir / f"{target_dir_name}.md"
+                    merged_dir.mkdir(parents=True, exist_ok=True)
+
+                    existing_content = ""
+                    if merge_option == "Merge into Existing Directory" and merged_md_path.exists():
+                        existing_content = merged_md_path.read_text(encoding="utf-8").strip() + "\n\n"
+                    else:
+                        st.session_state.is_payload_initialized[target_dir_name] = False
+
+                    merged_md_path.write_text(existing_content + "\n\n".join(new_content_list), encoding="utf-8")
+                    for doc_path in selected_docs:
+                        shutil.move(Path(doc_path).parent, merged_dir / Path(doc_path).parent.name)
+                    st.success(f"Documents merged into '{target_dir_name}'.")
+                    st.session_state.is_md_merger_active = False
+                    st.rerun()
+
+# -------------------------------------- Main Application -------------------------------------- #
 def main() -> None:
     init_session_state()
     with st.sidebar:
