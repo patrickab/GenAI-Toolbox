@@ -5,3 +5,4 @@ chat_histories
 data
 src/static
 embeddings
+src/archive
