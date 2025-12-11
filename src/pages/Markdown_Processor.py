@@ -551,12 +551,12 @@ def render_chunks(output_name: str) -> None:
 
         if st.session_state.is_chunk_edit_mode_active[unique_key_suffix] is True:
             # --- Edit Mode ---
+            action_cols = st.columns([1, 1, 8])
             editor_key = f"editor_{unique_key_suffix}"
             original_text = row[DatabaseKeys.KEY_TXT_RETRIEVAL]
             edited_text = editor(text_to_edit=original_text, language="latex", key=editor_key, height=800)
             edited_text # noqa
 
-            action_cols = st.columns([1, 1, 8])
             if action_cols[0].button("Save", key=f"save_btn_{unique_key_suffix}"):
                 current_df = st.session_state.rag_ingestion_payload[output_name].df
                 updated_df = current_df.with_columns(
