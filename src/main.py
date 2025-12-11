@@ -14,6 +14,7 @@ PAGES = {
         st.Page("pages/RAG_Workspace.py"),
         st.Page("pages/PDF_Workspace.py"),
         st.Page("pages/OCR_Workspace.py"),
+        st.Page("pages/Code_Workspace.py"),
     ],
     "RAG Data Miner": [
         st.Page("pages/PDF_Preprocessor.py"),
