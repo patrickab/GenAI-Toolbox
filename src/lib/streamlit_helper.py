@@ -122,7 +122,7 @@ def llm_params_sidebar()-> None:
         )
         st.session_state.llm_reasoning_effort = st.selectbox(
             "Reasoning Effort",
-            options=["low", "medium", "high"],
+            options=["none","low", "medium", "high"],
             key="reasoning_effort",
         )
 
