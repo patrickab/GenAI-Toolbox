@@ -2,7 +2,7 @@
 import streamlit as st
 
 from lib.non_user_prompts import SYS_OCR_TEXT_EXTRACTION
-from lib.streamlit_helper import EMPTY_PASTE_RESULT, PasteResult, editor, model_selector, options_message, paste_img_button
+from lib.streamlit_helper import EMPTY_PASTE_RESULT, PasteResult, editor, model_selector, options_message, paste_img_button, streamlit_img_to_bytes
 
 
 def ocr_sidebar() -> None:
@@ -22,7 +22,7 @@ def ocr_workspace() -> None:
             st.session_state.client.api_query(
             model=st.session_state.selected_model_ocr,
             system_prompt=SYS_OCR_TEXT_EXTRACTION,
-            img=img.image_data
+            img=streamlit_img_to_bytes(img)
             )
         )
         st.session_state.imgs_sent.append(st.session_state.pasted_image)
