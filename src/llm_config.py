@@ -14,6 +14,7 @@ MODELS_GEMINI = [
     "gemini/gemini-2.5-flash-lite",
     "gemini/gemini-2.5-flash",
     "gemini/gemini-2.5-pro",
+    "ollama/gemini-3-pro-preview",
 ]
 
 MODELS_OPENAI = [
