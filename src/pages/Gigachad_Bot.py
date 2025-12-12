@@ -32,6 +32,7 @@ def init_chat_variables() -> None:
         st.session_state.selected_prompt = next(iter(AVAILABLE_PROMPTS.keys()))
         st.session_state.system_prompts = AVAILABLE_PROMPTS
         st.session_state.usr_msg_captions = []
+        st.session_state.refactor_code = False
 
 # ---------------------------------------------------- Chat Interface functions ---------------------------------------------------- #
 def chat_interface() -> None:
@@ -50,7 +51,12 @@ def chat_interface() -> None:
                 st.markdown(prompt)
                 copy_button(prompt)
             with st.chat_message("assistant"):
-                prompt += st.session_state.file_context
+
+                # Can be toggled if "Code Assistant" prompt is selected
+                if st.session_state.refactor_code and st.session_state.selected_prompt == "Code Assistant":
+                    prompt = f"Analyze this module for possibilities of more concise implementation - without loss of robustness, compatibility or understandability :\n\n <code>\n{prompt}\n</code>" # noqa
+                    st.session_state.refactor_code = False
+
                 system_prompt = st.session_state.system_prompts[st.session_state.selected_prompt]
 
                 if st.session_state.is_rag_active:

@@ -103,6 +103,10 @@ def model_selector(key:str) -> None:
 def llm_params_sidebar()-> None:
     """Create LLM parameter sliders in Streamlit expander."""
     with st.expander("Model Configuration", expanded=False):
+
+        if st.session_state.selected_prompt == "Code Assistant":
+            st.session_state.refactor_code = st.toggle("Refactor code", value=False, key="refactor_code_toggle")
+
         st.session_state.llm_temperature = st.slider(
             "Temperature",
             min_value=0.0,
@@ -124,7 +128,6 @@ def llm_params_sidebar()-> None:
             options=["none","low", "medium", "high"],
             key="reasoning_effort",
         )
-
 
 def print_metrics(dict_metrics: dict[str,int|float], n_columns: Optional[int]=None) -> None:
     """Print metrics in Streamlit columns."""
