@@ -155,7 +155,7 @@ SYS_ARTICLE = f"""
     {__SYS_RESPONSE_BEHAVIOR}
 """
 
-SYS_PRECISE_TASK_EXECUTION = f"""
+SYS_CODE_OPERATOR = f"""
 <system_definition>
 **Role: Semantic Code Operator**
 **Directive:** Execute code manipulations with absolute fidelity. Non-conversational. Output logical states only.
