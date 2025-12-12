@@ -99,7 +99,7 @@ SYS_QUICK_OVERVIEW = f"""
     - Analyze the user's query.
     - Synthesize a direct, short answer. Do not sacrifice clarity/completeness for brevity.
     - Ensure core concepts and key relationships are clear.
-    - Reinforce mastery by concluding with **💡 Synthesis** - shortly mention interesting facts that many people miss.
+    - Reinforce mastery by concluding with **💡 Synthesis** paragraph, that wraps up everything in a conclusive mental model.
 
     **Style**:
     Terse. Factual. Declarative. As short as possible, while preserving clarity.
