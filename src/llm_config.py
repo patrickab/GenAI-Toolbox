@@ -37,12 +37,26 @@ MODELS_VLLM = [model.replace("models--", "", 1) for model in MODELS_VLLM if mode
 MODELS_VLLM = [model.replace("--", "/", 1) for model in MODELS_VLLM]
 MODELS_VLLM = [f"hosted_vllm/{model}" for model in MODELS_VLLM]
 
-ministral_14b_quantized = "hosted_vllm/cyankiwi/Ministral-3-14B-Instruct-2512-AWQ-4bit"
+def vllm_cmd(model:str, max_tokens:int) -> str:
+    """Efficiency optimizations to fit large models into small GPU"""
+    if model==qwen_coder_14b_quantized_bnb_4bit:
+        try:
+            import bitsandbytes # noqa
+        except ImportError:
+            subprocess.run(["uv", "pip", "install", "bitsandbytes>=0.46.1"], check=True) # todo: find more elegant way
+
+    os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
+    return (f"vllm serve {model.replace('hosted_vllm/', '')} " +
+        f"--port 8000 --gpu-memory-utilization 0.95 --max-model-len {max_tokens} " +
+        "--max-num-seqs 1 --enforce-eager")
+
+
+ministral_14b_quantized_awq_4bit = "hosted_vllm/cyankiwi/Ministral-3-14B-Instruct-2512-AWQ-4bit"
+qwen_coder_14b_quantized_bnb_4bit = "unsloth/Qwen2.5-Coder-14B-bnb-4bit"
+
 VLLM_STARTUP_COMMANDS = {
-    ministral_14b_quantized:
-        f"vllm serve {ministral_14b_quantized.replace('hosted_vllm/', '')} " +
-        "--port 8000 --gpu-memory-utilization 0.95 --max-model-len 2800 " +
-        "--max-num-seqs 1 --enforce-eager"
+    ministral_14b_quantized_awq_4bit: vllm_cmd(model=ministral_14b_quantized_awq_4bit, max_tokens=2800),
+    qwen_coder_14b_quantized_bnb_4bit: vllm_cmd(model=qwen_coder_14b_quantized_bnb_4bit, max_tokens=100)
 }
 
 # Expects API-Keys in environment variables & Huggingface tokens for tokenizer
