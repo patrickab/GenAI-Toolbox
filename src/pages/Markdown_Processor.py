@@ -657,7 +657,10 @@ def markdown_chunker() -> None:
             if st.button("Store chunks to Parquet", key=f"store_md_chunks_{selected_output}", type="primary"):
                 payload = st.session_state.rag_ingestion_payload[selected_output]
                 save_payload = RAGIngestionPayload(df=payload.df)
-                save_payload.to_parquet(pathlib.Path(f"{DIRECTORY_RAG_INPUT}/{selected_output}/{selected_output}_ingestion_payload.parquet"))
+
+                output_dir = pathlib.Path(f"{DIRECTORY_RAG_INPUT}/{selected_output}")
+                output_dir.mkdir(parents=True, exist_ok=True)
+                save_payload.to_parquet(output_dir / f"{selected_output}_ingestion_payload.parquet")
                 st.success(f"Stored chunked data for '{selected_output}' to Parquet.")
 
             # Render the interactive chunk editor, which operates on session_state directly
