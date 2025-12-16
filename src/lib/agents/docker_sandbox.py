@@ -1,3 +1,64 @@
+"""
+DockerSandbox: Foundation for Agentic, Git-Native, Test-Driven Development in Isolated Environments
+
+# Core Behavior:
+================
+- Initializes from a git repository or scratchpad with automatic cloning/pulling.
+- Runs all commands inside an isolated Docker container built with `uv` for fast dependency resolution and caching.
+- Exposes file I/O and command execution APIs that enforce container encapsulation.
+- Automatically mounts the host workspace for seamless local-dev parity.
+- Supports test-driven workflows via programmatic script execution and result introspection.
+
+## What It Does
+===============
+* Create an ephemeral Docker container for code execution.
+* Initialize a git workspace by cloning or creating a repository.
+* Run all commands **only inside the container**.
+* Expose controlled APIs for file I/O and command execution.
+* Mount the host workspace for local parity and persistence.
+* Support test-driven development with executable scripts and captured results.
+* Enforce clear authority boundaries between host and container.
+
+--- Overview
+
+### Initialization
+==================
+* Clone or pull a git repository, or start from an empty workspace.
+* Build a Docker image using `python:3.11-slim`.
+* Install `uv`, `git`, and common tooling.
+* Start a container tied to the sandbox instance lifecycle.
+
+### Execution
+=============
+* Execute shell commands inside the container.
+* Run Python code and scripts programmatically.
+* Capture stdout, stderr, exit codes, and logs.
+* Read and write files inside the container via streamed I/O.
+
+### Isolation
+=============
+* Mount the host repo at `/app/workspace` (read/write).
+* Hide host virtual environments with dummy mounts.
+* Share a persistent `uv` cache volume for faster installs.
+* Allow container access to host services when needed.
+
+### Lifecycle
+=============
+* Treat the container as disposable.
+* Automatically clean up the container on sandbox termination.
+
+---
+
+## Key Components
+=================
+* **DockerSandbox** — Primary interface; manages lifecycle and orchestration.
+* **_DockerFiles** — Read and write files inside the container.
+* **_DockerCommands** — Execute shell commands inside the container.
+* **DockerExecution** — Collect logs and execution results.
+* **DockerProcess** — Represent stdout, stderr, and exit codes.
+"""
+
+
 import os
 import subprocess
 import tarfile
