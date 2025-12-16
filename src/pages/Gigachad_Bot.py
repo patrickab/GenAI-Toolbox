@@ -19,7 +19,6 @@ from lib.streamlit_helper import (
     paste_img_button,
     streamlit_img_to_bytes,
 )
-from llm_config import LOCAL_NANOTASK_MODEL, MODELS_OLLAMA
 from pages.RAG_Workspace import init_rag_workspace, rag_sidebar
 
 EMPTY_PASTE_RESULT = PasteResult(image_data=None)
@@ -98,10 +97,9 @@ def chat_interface() -> None:
                 st.session_state.last_sent_image = img
                 st.session_state.pasted_image = EMPTY_PASTE_RESULT
                 # Caption user message
-                # Blocks new users without local ollama setup
-                if LOCAL_NANOTASK_MODEL in MODELS_OLLAMA and st.session_state.bool_caption_usr_msg:
+                if st.session_state.bool_caption_usr_msg:
                     caption = _non_streaming_api_query(
-                        model=LOCAL_NANOTASK_MODEL,
+                        model=st.session_state.selected_model,
                         prompt=prompt[:80],  # limit prompt length for captioning to avoid long processing times
                         system_prompt=SYS_CAPTION_GENERATOR
                     )

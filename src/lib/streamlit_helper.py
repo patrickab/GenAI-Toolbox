@@ -38,11 +38,9 @@ from llm_client import LLMClient
 from llm_config import (
     MODELS_EXLLAMA,
     MODELS_GEMINI,
-    MODELS_OCR_OLLAMA,
     MODELS_OLLAMA,
     MODELS_OPENAI,
     MODELS_VLLM,
-    NANOTASK_MODEL,
 )
 
 EMPTY_PASTE_RESULT = PasteResult(image_data=None)
@@ -56,7 +54,7 @@ if os.getenv("OPENAI_API_KEY"):
     AVAILABLE_LLM_MODELS += MODELS_OPENAI
 
 if MODELS_OLLAMA != []:
-    ignore_models = ["embeddinggemma:300m", *MODELS_OCR_OLLAMA]
+    ignore_models = ["embeddinggemma:300m"]
     AVAILABLE_LLM_MODELS += MODELS_OLLAMA
     AVAILABLE_LLM_MODELS = [model for model in AVAILABLE_LLM_MODELS if model not in ignore_models]
 
