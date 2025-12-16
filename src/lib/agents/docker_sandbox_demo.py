@@ -1,19 +1,36 @@
 # %% [markdown]
 # # Docker Sandbox Verification
-# Ensure you have the `DockerSandbox` class defined or imported before running this.
-from src.lib.agents.docker_sandbox import DockerSandbox
+import os
+import sys
+
+# Adjust import based on where you saved the class
+# from src.lib.agents.docker_sandbox import DockerSandbox
+from docker_sandbox import DockerSandbox
 
 # %%
 # 1. Initialize the Sandbox
-# This will build the image (if missing) and start the container.
+# This will:
+# a) Clone 'gigachad-bot' to ./agent_workspaces/gigachad-bot on your host
+# b) Build the 'agent-worker-uv' image (if missing)
+# c) Start the container with the repo mounted to /app/workspace
 try:
-    sandbox = DockerSandbox()
+    repo_url = "https://github.com/patrickab/gigachad-bot.git"
+    sandbox = DockerSandbox(repo_url=repo_url, branch="main")
     print(f"✅ Sandbox initialized. Container ID: {sandbox.container_id}")
+    print(f"📂 Host Repository Path: {sandbox.host_repo_path}")
 except Exception as e:
     print(f"❌ Initialization failed: {e}")
+    sys.exit(1)
 
 # %%
-# 2. Define the Fibonacci Task
+# 2. Verify Repository Mount
+# Let's check if the repo files actually exist inside the container
+print("--- Checking Container Workspace ---")
+ls_result = sandbox.commands.run("ls -la /app/workspace")
+print(ls_result.stdout)
+
+# %%
+# 3. Define the Fibonacci Task
 # We calculate f_0 through f_10 and print them to stdout.
 # We also write the result to a file in the shared workspace to test persistence.
 
@@ -36,6 +53,7 @@ fib_seq = get_fibonacci_sequence(count)
 print(f"Fibonacci Sequence (f0-f10): {fib_seq}")
 
 # 2. Write to Workspace (captured by host volume)
+# Note: /app/workspace maps to your host's ./agent_workspaces/gigachad-bot
 output_path = "/app/workspace/fib_output.txt"
 with open(output_path, "w") as f:
     f.write(str(fib_seq))
@@ -44,12 +62,12 @@ print(f"Saved result to {output_path}")
 """
 
 # %%
-# 3. Execute the Code
-print("⏳ Executing Fibonacci script inside container...")
+# 4. Execute the Code
+print("\n⏳ Executing Fibonacci script inside container...")
 execution = sandbox.run_code(fib_script)
 
 # %%
-# 4. Verify Results (Logs)
+# 5. Verify Results (Logs)
 print("--- Execution Logs ---")
 if execution.logs.stderr:
     print(f"❌ STDERR:\n{execution.logs.stderr}")
@@ -57,24 +75,22 @@ else:
     print(f"✅ STDOUT:\n{execution.logs.stdout}")
 
 # %%
-# 5. Verify Persistence (Host Volume)
+# 6. Verify Persistence (Host Volume)
 # The container wrote to /app/workspace/fib_output.txt
-# Because of the volume bind, this should exist on your Host machine in ./workspace/fib_output.txt
+# We check the specific repo folder on the host.
 
-import os
-
-host_file_path = os.path.join(sandbox.workspace_path, "fib_output.txt")
+host_file_path = os.path.join(sandbox.host_repo_path, "fib_output.txt")
 
 if os.path.exists(host_file_path):
     with open(host_file_path, "r") as f:
         content = f.read()
-    print(f"✅ Host File Check: Found 'fib_output.txt' in {sandbox.workspace_path}")
+    print(f"✅ Host File Check: Found 'fib_output.txt' at {host_file_path}")
     print(f"📂 File Content: {content}")
 else:
     print(f"❌ Host File Check: File not found at {host_file_path}")
 
 # %%
-# 6. Cleanup
+# 7. Cleanup
 # Stop and remove the container.
 sandbox.stop()
 print("🛑 Sandbox stopped.")
