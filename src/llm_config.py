@@ -6,6 +6,9 @@ HOME = os.path.expanduser("~")
 DIRECTORY_TABBY = os.path.join(HOME, "tabbyAPI")
 HUGGINGFACE_DIR = os.path.join(HOME, ".cache", "huggingface", "hub")
 
+# --- Model Defaults ---
+NANOTASK_MODEL = "gemini/gemini-2.5-flash-lite"
+
 # --- Static Model Definitions ---
 MODELS_GEMINI = [
     "gemini/gemini-2.5-flash-lite",

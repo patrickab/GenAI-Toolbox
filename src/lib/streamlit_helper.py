@@ -35,13 +35,7 @@ from lib.prompts import (
     SYS_RAG_TUTOR,
 )
 from llm_client import LLMClient
-from llm_config import (
-    MODELS_EXLLAMA,
-    MODELS_GEMINI,
-    MODELS_OLLAMA,
-    MODELS_OPENAI,
-    MODELS_VLLM,
-)
+from llm_config import MODELS_EXLLAMA, MODELS_GEMINI, MODELS_OLLAMA, MODELS_OPENAI, MODELS_VLLM, NANOTASK_MODEL
 
 EMPTY_PASTE_RESULT = PasteResult(image_data=None)
 
