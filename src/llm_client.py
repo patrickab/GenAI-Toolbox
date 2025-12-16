@@ -1,6 +1,6 @@
 import csv
 import os
-from typing import Any, Dict, Iterator, List, Tuple, Union
+from typing import Any, Dict, Iterator, List, Union
 
 from litellm.types.utils import ModelResponse
 from llm_baseclient.client import LLMClient as BaseLLMClient
@@ -28,7 +28,7 @@ class LLMClient(BaseLLMClient):
 
     def __init__(self) -> None:
         super().__init__()
-        self.messages: List[Tuple[str, str]] = []  # [role, message] - only store text for efficiency
+        self.messages: List[Dict[str, str]] = []  # [role, message] - only store text for efficiency
         self.sys_prompt = ""
 
     # -------------------------------- LLM Interaction -------------------------------- #
