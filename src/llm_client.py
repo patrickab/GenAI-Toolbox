@@ -35,13 +35,13 @@ class LLMClient(LLMClient):
     # -------------------------------- LLM Interaction -------------------------------- #
     def chat(self, model: str, vllm_cmd: Optional[str] = None, **kwargs: Dict[str, any]) -> Iterator[str] | ChatCompletion:
         """Overrides base chat method to add hardware-aware defaults."""
-        if vllm_cmd is None and model in VLLM_CONFIG:
+        if model in VLLM_CONFIG:
             vllm_cmd = VLLM_CONFIG[model]
             vllm_cmd = vllm_cmd.split()
 
         if model in EXLLAMA_CONFIG:
-            extra_body = EXLLAMA_CONFIG[model]
-            kwargs["extra_body"] = extra_body
+            config = EXLLAMA_CONFIG[model]
+            kwargs["tabby_config"] = config
 
         return super().chat(model=model,vllm_cmd=vllm_cmd,**kwargs,)
 

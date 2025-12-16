@@ -81,7 +81,7 @@ if os.path.exists(os.path.join(DIRECTORY_TABBY, "models")):
     MODELS_EXLLAMA = [f"tabby/{m}" for m in os.listdir(os.path.join(DIRECTORY_TABBY, "models")) if m != "place_your_models_here.txt"]
 
 qwen_coder_14b_exl2 = "Qwen2.5-Coder-14B-Instruct-exl2"
-EXLLAMA_CONFIG = {qwen_coder_14b_exl2: {"max_seq_len": 8192, "cache_mode": "Q4"}}
+EXLLAMA_CONFIG = {f"tabby/{qwen_coder_14b_exl2}": {"max_seq_len": 16384, "cache_mode": "Q4"}}
 
 # Expects API-Keys in environment variables & Huggingface tokens for tokenizer
 DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001"
