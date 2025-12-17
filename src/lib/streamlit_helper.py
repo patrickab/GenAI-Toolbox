@@ -91,6 +91,7 @@ def init_session_state() -> None:
         st.session_state.imgs_sent = [EMPTY_PASTE_RESULT]
         st.session_state.pasted_image = EMPTY_PASTE_RESULT
 
+
 def model_selector(key: str) -> dict:
     """Create model selection dropdowns in Streamlit sidebar expanders."""
     model_options = []
@@ -128,10 +129,10 @@ def model_selector(key: str) -> dict:
         key=f"{selected_provider}_model_select_{key}",
     )
 
-def llm_params_sidebar()-> None:
+
+def llm_params_sidebar() -> None:
     """Create LLM parameter sliders in Streamlit expander."""
     with st.expander("Model Configuration", expanded=False):
-
         if st.session_state.selected_prompt == "Code Assistant":
             st.session_state.refactor_code = st.toggle("Refactor code", value=False, key="refactor_code_toggle")
 
@@ -153,9 +154,10 @@ def llm_params_sidebar()-> None:
         )
         st.session_state.llm_reasoning_effort = st.selectbox(
             "Reasoning Effort",
-            options=["none","low", "medium", "high"],
+            options=["none", "low", "medium", "high"],
             key="reasoning_effort",
         )
+
 
 def render_messages(message_container, client: LLMClient) -> None:  # noqa
     """Render chat messages from session state."""
@@ -169,7 +171,7 @@ def render_messages(message_container, client: LLMClient) -> None:  # noqa
 
     with message_container:
         for i in range(0, len(messages), 2):
-            is_last = i == len(messages) - 2 # expand only the last message / display RAG context
+            is_last = i == len(messages) - 2  # expand only the last message / display RAG context
             label = f"QA-Pair {i // 2}: " if len(st.session_state.usr_msg_captions) == 0 else st.session_state.usr_msg_captions[i // 2]
             user_msg = messages[i]["content"]
             assistant_msg = messages[i + 1]["content"]
@@ -187,7 +189,9 @@ def render_messages(message_container, client: LLMClient) -> None:  # noqa
                     if is_last and st.session_state.is_rag_active:
                         documents = st.session_state.rag_response.to_polars()
                         for doc in documents.iter_rows(named=True):
-                            with st.expander(f"**Similarity**: {doc[DatabaseKeys.KEY_SIMILARITIES]:.2f}   -  **Title**: {doc[DatabaseKeys.KEY_TITLE]}"): # noqa
+                            with st.expander(
+                                f"**Similarity**: {doc[DatabaseKeys.KEY_SIMILARITIES]:.2f}   -  **Title**: {doc[DatabaseKeys.KEY_TITLE]}"
+                            ):  # noqa
                                 st.markdown(doc[DatabaseKeys.KEY_TXT_RETRIEVAL])
 
                     if is_last:
@@ -195,7 +199,8 @@ def render_messages(message_container, client: LLMClient) -> None:  # noqa
 
                 options_message(assistant_message=assistant_msg, button_key=f"{i // 2}", user_message=user_msg, index=i)
 
-def print_metrics(dict_metrics: dict[str,int|float], n_columns: Optional[int]=None) -> None:
+
+def print_metrics(dict_metrics: dict[str, int | float], n_columns: Optional[int] = None) -> None:
     """Print metrics in Streamlit columns."""
     if n_columns is None:
         n_columns = len(dict_metrics)
@@ -203,10 +208,12 @@ def print_metrics(dict_metrics: dict[str,int|float], n_columns: Optional[int]=No
     for idx, (metric_name, metric_value) in enumerate(dict_metrics.items()):
         cols[idx % n_columns].metric(f"**{metric_name}:**", value=metric_value, border=True)
 
+
 def streamlit_img_to_bytes(img: PasteResult) -> bytes:
     buffer = io.BytesIO()
     img.image_data.save(buffer, format="PNG")
     return buffer.getvalue()
+
 
 def paste_img_button() -> PasteResult:
     """Handle image pasting in Streamlit app."""
@@ -215,8 +222,8 @@ def paste_img_button() -> PasteResult:
         with st.expander("Previously pasted images:"):
             for idx, img in enumerate(st.session_state.imgs_sent):
                 if img != EMPTY_PASTE_RESULT:
-                    with st.expander(f"Image {idx+1}"):
-                        st.image(img.image_data, caption=f"Image {idx+1}")
+                    with st.expander(f"Image {idx + 1}"):
+                        st.image(img.image_data, caption=f"Image {idx + 1}")
 
     # check wether streamlit background is in dark mode or light mode
     bg_color = st.get_option("theme.base")  # 'light' or 'dark
@@ -229,49 +236,45 @@ def paste_img_button() -> PasteResult:
         button_color_txt = "#000000"
         button_color_hover = "#CCCCCC"
 
-    paste_result = paste_image_button("Paste from clipboard",
-                background_color=button_color_bg,
-                text_color=button_color_txt,
-                hover_background_color=button_color_hover)
+    paste_result = paste_image_button(
+        "Paste from clipboard",
+        background_color=button_color_bg,
+        text_color=button_color_txt,
+        hover_background_color=button_color_hover,
+    )
 
     if paste_result not in st.session_state.imgs_sent:
-
         st.session_state.pasted_image = paste_result
         st.image(paste_result.image_data)
         return paste_result
 
-    else: # set pasted_image to None
+    else:  # set pasted_image to None
         st.session_state.pasted_image = EMPTY_PASTE_RESULT
         return EMPTY_PASTE_RESULT
+
 
 def editor(text_to_edit: str, language: str, key: str, height: Optional[int] = None) -> str:
     """Create an ACE editor for displaying OCR extracted text."""
     default_theme = "chaos"
-    selected_theme = st.selectbox(
-        label="Editor Theme",
-        options=THEMES,
-        index=THEMES.index(default_theme),
-        key=f"editor_theme_{key}"
-    )
+    selected_theme = st.selectbox(label="Editor Theme", options=THEMES, index=THEMES.index(default_theme), key=f"editor_theme_{key}")
 
     line_count = text_to_edit.count("\n") + 1
     if height is None:
-        height = line_count*15
+        height = line_count * 15
 
-    content = st_ace(value=text_to_edit, language=language, height=height, key=f"editor_{key}", theme=selected_theme) #noqa
-    content # noqa
+    content = st_ace(value=text_to_edit, language=language, height=height, key=f"editor_{key}", theme=selected_theme)  # noqa
+    content  # noqa
     return content
 
-def _non_streaming_api_query(model: str, prompt: str, system_prompt: str, img:Optional[PasteResult] = EMPTY_PASTE_RESULT) -> str:
+
+def _non_streaming_api_query(model: str, prompt: str, system_prompt: str, img: Optional[PasteResult] = EMPTY_PASTE_RESULT) -> str:
     """TODO: remove - Legacy helper - can be replaced by client api calls"""
     response = st.session_state.client.api_query(
-        model=model,
-        user_message=prompt,
-        system_prompt=system_prompt,
-        stream=False,
-        chat_history=None, img=img.image_data)
+        model=model, user_message=prompt, system_prompt=system_prompt, stream=False, chat_history=None, img=img.image_data
+    )
 
     return response
+
 
 def write_to_md(filename: str, message: str) -> None:
     """Write an assistant response to .md (idx: 0 = most recent)."""
@@ -293,7 +296,8 @@ def write_to_md(filename: str, message: str) -> None:
     with open(os.path.join("markdown", filename), "w", encoding="utf-8") as f:
         f.write(yaml_header + "\n" + message)
 
-def options_message(assistant_message: str, button_key: str, user_message: str = None, index: int = None) -> None: # noqa
+
+def options_message(assistant_message: str, button_key: str, user_message: str = None, index: int = None) -> None:  # noqa
     """Uses st.popover for a less intrusive save option."""
     with st.popover("Options"):
         with st.popover("Store answer"):
@@ -312,8 +316,9 @@ def options_message(assistant_message: str, button_key: str, user_message: str =
             copy_button(text=assistant_message)
 
         if index is not None and st.button("🗑", key=f"del_{index}"):
-            del st.session_state.client.messages[index:index+2]
+            del st.session_state.client.messages[index : index + 2]
             st.rerun()
+
 
 def apply_custom_css() -> None:
     """Apply custom CSS styles to Streamlit app."""
@@ -335,6 +340,7 @@ def apply_custom_css() -> None:
         unsafe_allow_html=True,
     )
 
+
 @st.cache_resource
 def _extract_text_from_pdf(file: io.BytesIO) -> str:
     """Extract text from uploaded PDF file using pymupdf4llm."""
@@ -353,6 +359,7 @@ def _extract_text_from_pdf(file: io.BytesIO) -> str:
         doc_height = int(doc[0].rect.height * 1.5)  # Scale up for better visibility
 
     return text, doc_height
+
 
 @contextmanager
 def nyan_cat_spinner() -> Iterator:
