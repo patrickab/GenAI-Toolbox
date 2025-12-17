@@ -6,25 +6,24 @@ from llm_baseclient.client import LLMClient
 from pydantic import BaseModel, Field
 import streamlit as st
 
+from lib.agents.docker_sandbox import DockerSandbox
 from lib.streamlit_helper import model_selector
 from lib.utils.logger import get_logger
-from src.lib.agents.docker_sandbox import DockerSandbox
 
 logger = get_logger()
 
 
 class AgentTool(BaseModel):
-    """Base class that unifies schema definition and execution logic."""
+    """Base class unifiying schema, execution, and error handling."""
 
     @classmethod
     def definition(cls) -> Dict[str, Any]:
-        """Auto-generates OpenAI tool definition from Pydantic schema."""
         schema = cls.model_json_schema()
         return {
             "type": "function",
             "function": {
                 "name": cls.__name__,
-                "description": cls.__doc__.strip() if cls.__doc__ else "",
+                "description": (cls.__doc__ or "").strip(),
                 "parameters": {
                     "type": "object",
                     "properties": schema.get("properties", {}),
@@ -34,90 +33,70 @@ class AgentTool(BaseModel):
         }
 
     def run(self, sandbox: DockerSandbox) -> str:
-        """Abstract method to execute the tool logic."""
         raise NotImplementedError
 
+    def safe_run(self, sandbox: DockerSandbox) -> str:
+        """Executes run() with centralized error handling and logging."""
+        try:
+            return self.run(sandbox)
+        except Exception as e:
+            logger.error(f"Tool Error ({self.__class__.__name__}): {e}", exc_info=True)
+            return f"Error executing {self.__class__.__name__}: {e}"
 
-# --- CONCRETE TOOLS (Schema + Logic) ---
+
+# --- CONCRETE TOOLS (Logic) ---
 
 
 class ReadFile(AgentTool):
-    """
-    Reads a specific section of a file. Returns content with line numbers.
-    Use this to inspect code before editing.
-    """
+    """Reads a file section with line numbers. Use before editing."""
 
-    path: str = Field(..., description="The relative path to the file")
-    start_line: int = Field(1, description="The line number to start reading from (1-based)")
-    end_line: int = Field(100, description="The line number to end reading at (1-based)")
+    path: str = Field(..., description="Relative path to file")
+    start_line: int = Field(1, description="Start line (1-based)")
+    end_line: int = Field(100, description="End line (1-based)")
 
     def run(self, sandbox: DockerSandbox) -> str:
-        logger.debug("ACI Tools: Reading file '%s' lines %d-%d", self.path, self.start_line, self.end_line)
-        try:
-            content = sandbox.files.read(self.path)
-            lines = content.splitlines()
-            start_idx = max(0, self.start_line - 1)
-            end_idx = min(len(lines), self.end_line)
+        content = sandbox.files.read(self.path)
+        lines = content.splitlines()
+        start = max(0, self.start_line - 1)
+        end = min(len(lines), self.end_line)
 
-            output = [f"{start_idx + i + 1}: {line}" for i, line in enumerate(lines[start_idx:end_idx])]
-
-            if not output:
-                return "File is empty or range is invalid."
-            return "\n".join(output)
-        except Exception as e:
-            logger.error(f"Error reading file: {e}", exc_info=True)
-            return str(e)
+        output = [f"{start + i + 1}: {line}" for i, line in enumerate(lines[start:end])]
+        return "\n".join(output) if output else "File is empty or range is invalid."
 
 
 class EditFile(AgentTool):
-    """
-    Replaces lines in a file with new content.
-    Auto-lints before saving to prevent syntax errors.
-    """
+    """Replaces lines in a file. Auto-lints before saving."""
 
-    path: str = Field(..., description="The relative path to the file")
-    start_line: int = Field(..., description="The line number to start replacing (1-based)")
-    end_line: int = Field(..., description="The line number to end replacing (1-based, inclusive)")
-    new_content: str = Field(..., description="The new code to insert (can be multiple lines)")
+    path: str = Field(..., description="Relative path")
+    start_line: int = Field(..., description="Start line (1-based)")
+    end_line: int = Field(..., description="End line (1-based, inclusive)")
+    new_content: str = Field(..., description="New content")
 
     def run(self, sandbox: DockerSandbox) -> str:
-        logger.info("ACI Tools: Editing file '%s' lines %d-%d", self.path, self.start_line, self.end_line)
-        try:
-            content = sandbox.files.read(self.path)
-            lines = content.splitlines()
-            start_idx = max(0, self.start_line - 1)
+        lines = sandbox.files.read(self.path).splitlines()
+        start_idx = max(0, self.start_line - 1)
 
-            if start_idx > len(lines):
-                return f"Error: Start line {self.start_line} is beyond end of file ({len(lines)} lines)"
+        if start_idx > len(lines):
+            return f"Error: Start line {self.start_line} > file length ({len(lines)})"
 
-            final_lines = lines[:start_idx] + self.new_content.splitlines() + lines[self.end_line :]
-            final_content = "\n".join(final_lines)
+        final_lines = lines[:start_idx] + self.new_content.splitlines() + lines[self.end_line :]
+        temp_path = f"{self.path}.temp_lint"
+        sandbox.files.write(temp_path, "\n".join(final_lines))
 
-            # Write temp and lint
-            temp_path = f"{self.path}.temp_lint"
-            sandbox.files.write(temp_path, final_content)
+        if (proc := sandbox.commands.run(f"python3 -m py_compile {shlex.quote(temp_path)}")).exit_code != 0:
+            sandbox.commands.run(f"rm {temp_path}")
+            return f"❌ Edit Rejected: Syntax Error.\n{proc.stderr}"
 
-            proc = sandbox.commands.run(f"python3 -m py_compile {shlex.quote(temp_path)}")
-            if proc.exit_code != 0:
-                sandbox.commands.run(f"rm {temp_path}")
-                return f"❌ Edit Rejected: Syntax Error.\n{proc.stderr}"
-
-            sandbox.commands.run(f"mv {temp_path} {self.path}")
-            return "✅ Success: File edited and syntax verified."
-        except Exception as e:
-            logger.error(f"Error editing file: {e}", exc_info=True)
-            return str(e)
+        sandbox.commands.run(f"mv {temp_path} {self.path}")
+        return "✅ Success: File edited and syntax verified."
 
 
 class RunShell(AgentTool):
-    """
-    Executes a shell command in the sandbox.
-    """
+    """Executes a shell command."""
 
-    command: str = Field(..., description="The bash command to run")
+    command: str = Field(..., description="Bash command")
 
     def run(self, sandbox: DockerSandbox) -> str:
-        logger.info("ACI Tools: Running shell: %s", self.command)
         proc = sandbox.commands.run(self.command)
         return f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}\nExit Code: {proc.exit_code}"
 
@@ -145,144 +124,81 @@ class ListDir(AgentTool):
         if proc.exit_code != 0:
             return f"Error: {proc.stderr}"
 
-        lines = [l for l in proc.stdout.splitlines() if not l.startswith((".", "__"))]
+        lines = [line for line in proc.stdout.splitlines() if not line.startswith((".", "__"))]
         return "\n".join(lines[:50]) + ("\n... (Truncated)" if len(lines) > 50 else "")
 
 
 class CodeAgentTools:
-    """
-    The Runtime implementation of the Agent-Computer Interface (ACI).
-    Dispatches Pydantic tools to the DockerSandbox.
-    """
+    """Runtime ACI: Dispatches Pydantic tools to the DockerSandbox."""
 
     def __init__(self, sandbox: DockerSandbox) -> None:
         self.sandbox = sandbox
-        # Registry is now a simple list of classes
-        self.registry = {t.__name__: t for t in [ReadFile, EditFile, RunShell, SearchCode, ListDir]}
+        # Auto-discover tools inheriting from AgentTool
+        self.registry = {cls.__name__: cls for cls in AgentTool.__subclasses__()}
         logger.debug("ACI Tools: Initialized with %d tools", len(self.registry))
 
     def get_definitions(self) -> List[Dict[str, Any]]:
-        """Exposes the schemas to the LLM Client in OpenAI format."""
         return [t.definition() for t in self.registry.values()]
 
     def execute(self, tool_name: str, arguments: Dict[str, Any]) -> str:
-        """
-        Dispatcher: Instantiates the tool model and runs it.
-        """
-        tool_cls = self.registry.get(tool_name)
-        if not tool_cls:
-            return f"Error: Tool '{tool_name}' not found"
-
-        try:
-            # Validate args & Instantiate
-            tool = tool_cls(**arguments)
-            # Execute
-            return tool.run(self.sandbox)
-        except Exception as e:
-            error_msg = f"Error executing {tool_name}: {e}"
-            logger.error(error_msg, exc_info=True)
-            return error_msg
-
-
-# --- AGENT LOGIC ---
+        if tool_cls := self.registry.get(tool_name):
+            return tool_cls(**arguments).safe_run(self.sandbox)
+        return f"Error: Tool '{tool_name}' not found"
 
 
 class CodeAgent:
-    """
-    Autonomous Agent that uses LLMClient and CodeAgentTools to solve tasks.
-    Implements the Think -> Act -> Observe loop with UI feedback.
-    """
+    """Autonomous Agent implementing Think -> Act -> Observe loop."""
 
     def __init__(self, repo_url: str, branch: str = "main") -> None:
-        # 1. Initialize Components
         self.client = LLMClient()
         self.sandbox = DockerSandbox(repo_url=repo_url, branch=branch)
         self.tools = CodeAgentTools(self.sandbox)
         self.tool_definitions = self.tools.get_definitions()
 
-        # 2. ACI-Specific System Prompt (The "Brain" Logic)
+        tool_list = ", ".join(self.tools.registry.keys())
         self.system_prompt = (
             "You are an expert software engineer working in a sandboxed environment.\n"
-            "TOOLS: You have access to 'read_file', 'edit_file', 'run_shell', etc.\n"
+            f"TOOLS: You have access to: {tool_list}.\n"
             "PROTOCOL:\n"
-            "1. EXPLORE: Always list_dir and read_file before editing.\n"
+            "1. EXPLORE: Always ListDir and ReadFile before editing.\n"
             "2. VERIFY: Always create a reproduction script or test case before fixing.\n"
-            "3. EDIT: Use edit_file with precise line numbers (derived from read_file).\n"
-            "4. TEST: Run your test script to confirm the fix.\n"
-            "5. DONE: When the test passes, output 'TASK_COMPLETE'."
+            "3. EDIT: Use EditFile with precise line numbers.\n"
+            "4. TEST: confirm fix with tests.\n"
+            "5. DONE: Output 'TASK_COMPLETE'."
         )
 
-        # 3. Inject System Prompt if history is empty
         if not self.client.messages:
             self.client.messages.append({"role": "system", "content": self.system_prompt})
 
     def run(self, task: str, model: str, max_steps: int = 15) -> Generator[Dict[str, Any], None, None]:
-        """
-        Executes the agent loop, yielding events for the UI.
-        Yields: {'type': str, 'content': str, 'name': str, 'args': str}
-        """
+        """Executes the agent loop, yielding UI events."""
+        response = self.client.chat(model=model, user_msg=task, tools=self.tool_definitions, stream=False)
 
-        # 1. Initial Call to LLM
-        # We pass the user task here.
-        response = self.client.chat(
-            model=model,  # Fallback default
-            user_msg=task,
-            tools=self.tool_definitions,
-            stream=False,
-        )
-
-        step = 0
-        while step < max_steps:
-            step += 1
+        for step in range(1, max_steps + 1):
             message = response.choices[0].message
 
-            # --- CASE A: Tool Call (The Agent wants to act) ---
             if message.tool_calls:
-                # Yield status update to UI
                 yield {"type": "status", "content": f"Step {step}: Agent is using tools..."}
 
                 for tool_call in message.tool_calls:
-                    func_name = tool_call.function.name
-                    args_str = tool_call.function.arguments
-
-                    # Yield the intent (Show user what tool is being called)
-                    yield {"type": "tool_call", "name": func_name, "args": args_str}
+                    yield {"type": "tool_call", "name": tool_call.function.name, "args": tool_call.function.arguments}
 
                     try:
-                        # Parse Arguments
-                        args = json.loads(args_str)
-
-                        # Execute Tool (ACI Runtime)
-                        result = self.tools.execute(func_name, args)
-                    except Exception as e:
-                        result = f"Error executing tool: {e!s}"
+                        args = json.loads(tool_call.function.arguments)
+                        result = self.tools.execute(tool_call.function.name, args)
+                    except json.JSONDecodeError:
+                        result = "Error: Invalid JSON arguments."
                         yield {"type": "error", "content": result}
 
-                    # Yield the result (Show user the output)
                     yield {"type": "tool_result", "content": result}
-
-                    # Update LLM History (Critical for State)
                     self.client.add_tool_result(tool_call_id=tool_call.id, output=result)
 
-                # Recursion: Call LLM again with the tool outputs
-                # user_msg is None because we are continuing the existing thread
                 response = self.client.chat(model=model, user_msg=None, tools=self.tool_definitions, stream=False)
-
-            # --- CASE B: Text Response (The Agent wants to talk or is done) ---
             else:
-                content = message.content
-                yield {"type": "response", "content": content}
-
-                # Stop Condition 1: Explicit Token
-                if "TASK_COMPLETE" in content:
+                yield {"type": "response", "content": message.content}
+                if message.content and "TASK_COMPLETE" in message.content:
                     break
-
-                # Stop Condition 2: Model yielded text instead of tools (HITL)
-                # We break to allow the user to reply.
                 break
-
-
-# --- STREAMLIT INTERFACE ---
 
 
 def main() -> None:
@@ -304,59 +220,38 @@ def main() -> None:
 
         debug_mode = st.toggle("Debug Mode", value=False)
         if st.button("Reset Agent"):
-            st.session_state.pop("agent", None)
-            st.session_state.messages = []
+            st.session_state.pop("code_agent", None)
             st.rerun()
 
     with st._bottom:
         prompt = st.chat_input("Assign a task to the agent...")
 
     if prompt:
-        # Show User Message
         with st.chat_message("user"):
             st.markdown(prompt)
-        # (Optional) Add to UI history
-        # st.session_state.messages.append({"role": "user", "content": prompt})
 
-        # Run Agent
         with st.chat_message("assistant"):
             container = st.container()
             status_container = container.empty()
             response_placeholder = container.empty()
-            full_response = ""
 
-            # Stream agent steps
             code_agent: CodeAgent = st.session_state.code_agent
 
             try:
                 for event in code_agent.run(task=prompt, model=st.session_state.selected_model):
-                    # A. Status Update (Spinner logic)
                     if event["type"] == "status":
                         status_container.status(event["content"], state="running")
-
-                    # B. Tool Call (Expandable details)
                     elif event["type"] == "tool_call":
                         with container.expander(f"🛠️ Executing: {event['name']}"):
                             st.code(event["args"], language="json")
-
-                    # C. Tool Result (Output)
                     elif event["type"] == "tool_result":
                         with container.expander("📄 Result", expanded=debug_mode):
                             st.code(event["content"])
-
-                    # D. Final/Text Response
                     elif event["type"] == "response":
-                        status_container.empty()  # Remove status spinner
-                        full_response = event["content"]
-                        response_placeholder.markdown(full_response)
-
-                    # E. Error
+                        status_container.empty()
+                        response_placeholder.markdown(event["content"])
                     elif event["type"] == "error":
                         container.error(event["content"])
-
-                # (Optional) Add to UI history
-                # st.session_state.messages.append({"role": "assistant", "content": full_response})
-
             except Exception as e:
                 st.error(f"Runtime Error: {e}")
 
