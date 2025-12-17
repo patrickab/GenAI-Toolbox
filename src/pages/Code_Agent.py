@@ -272,7 +272,7 @@ class CodeAgent:
         if not self.client.messages:
             self.client.messages.append({"role": "system", "content": self.system_prompt})
 
-    def run(self, task: str, max_steps: int = 15) -> Generator[Dict[str, Any], None, None]:
+    def run(self, task: str, model: str, max_steps: int = 15) -> Generator[Dict[str, Any], None, None]:
         """
         Executes the agent loop, yielding events for the UI.
         Yields: {'type': str, 'content': str, 'name': str, 'args': str}
@@ -281,7 +281,7 @@ class CodeAgent:
         # 1. Initial Call to LLM
         # We pass the user task here.
         response = self.client.chat(
-            model=st.session_state.get("selected_model", "gpt-4o"),  # Fallback default
+            model=model,  # Fallback default
             user_msg=task,
             tools=self.tool_definitions,
             stream=False,
@@ -322,9 +322,7 @@ class CodeAgent:
 
                 # Recursion: Call LLM again with the tool outputs
                 # user_msg is None because we are continuing the existing thread
-                response = self.client.chat(
-                    model=st.session_state.get("selected_model", "gpt-4o"), user_msg=None, tools=self.tool_definitions, stream=False
-                )
+                response = self.client.chat(model=model, user_msg=None, tools=self.tool_definitions, stream=False)
 
             # --- CASE B: Text Response (The Agent wants to talk or is done) ---
             else:
@@ -387,7 +385,7 @@ def main() -> None:
             code_agent: CodeAgent = st.session_state.code_agent
 
             try:
-                for event in code_agent.run(prompt):
+                for event in code_agent.run(task=prompt, model=st.session_state.selected_model):
                     # A. Status Update (Spinner logic)
                     if event["type"] == "status":
                         status_container.status(event["content"], state="running")
