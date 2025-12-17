@@ -22,39 +22,39 @@ class CodeAgentTools:
 
     def __init__(self, sandbox: DockerSandbox) -> None:
         self.sandbox = sandbox
-        logger.debug("CodeAgentTools initialized with sandbox: %s", sandbox)
+        logger.debug("ACI Tools: CodeAgentTools initialized with sandbox: %s", sandbox)
 
     def get_definitions(self) -> list[dict]:
         """Exposes the schemas to the LLM Client."""
-        logger.debug("Fetching tool definitions")
+        logger.debug("ACI Tools: Fetching tool definitions")
         tools = get_aci_tools()
-        logger.info("Retrieved %d tool definitions", len(tools))
+        logger.info("ACI Tools: Retrieved %d tool definitions", len(tools))
         return tools
 
     def execute(self, tool_name: str, arguments: Dict[str, Any]) -> str:
         """
         Dispatcher: Routes the tool name to the actual Python method.
         """
-        logger.info("Executing tool '%s' with args: %s", tool_name, arguments)
+        logger.info("ACI Tools: Executing tool '%s' with args: %s", tool_name, arguments)
         method = getattr(self, f"_{tool_name}", None)
         if not method:
-            error_msg = f"Tool '{tool_name}' not found"
+            error_msg = f"ACI Tools: Tool '{tool_name}' not found"
             logger.warning(error_msg)
             return f"Error: {error_msg}"
 
         try:
             result = method(**arguments)
-            logger.debug("Tool '%s' executed successfully", tool_name)
+            logger.debug("ACI Tools: Tool '%s' executed successfully", tool_name)
             return result
         except Exception as e:
-            error_msg = f"Error executing {tool_name}: {e!s}"
+            error_msg = f"ACI Tools: Error executing {tool_name}: {e!s}"
             logger.error(error_msg, exc_info=True)
             return error_msg
 
     # --- Tool Implementations ---
 
     def _read_file(self, path: str, start_line: int = 1, end_line: int = 100) -> str:
-        logger.debug("Reading file '%s' lines %d-%d", path, start_line, end_line)
+        logger.debug("ACI Tools: Reading file '%s' lines %d-%d", path, start_line, end_line)
         try:
             content = self.sandbox.files.read(path)
             lines = content.splitlines()
@@ -71,18 +71,18 @@ class CodeAgentTools:
                 output.append(f"{start_idx + i + 1}: {line}")
 
             if not output:
-                logger.info("File read returned empty content for '%s'", path)
+                logger.info("ACI Tools: File read returned empty content for '%s'", path)
                 return "File is empty or range is invalid."
 
-            logger.debug("Successfully read %d lines from '%s'", len(output), path)
+            logger.debug("ACI Tools: Successfully read %d lines from '%s'", len(output), path)
             return "\n".join(output)
         except Exception as e:
-            error_msg = f"Error reading file: {e}"
+            error_msg = f"ACI Tools: Error reading file: {e}"
             logger.error(error_msg, exc_info=True)
             return error_msg
 
     def _edit_file(self, path: str, start_line: int, end_line: int, new_content: str) -> str:
-        logger.info("Editing file '%s' from line %d to %d", path, start_line, end_line)
+        logger.info("ACI Tools: Editing file '%s' from line %d to %d", path, start_line, end_line)
         # TODO: Safety checks - "expected_start_line=code[start_line] expected_end_line=code[end_line]"
         try:
             # 1. Read original
@@ -98,7 +98,7 @@ class CodeAgentTools:
 
             # Safety Check: Are we extending the file?
             if start_idx > len(lines):
-                error_msg = f"Start line {start_line} is beyond end of file ({len(lines)} lines)"
+                error_msg = f"ACI Tools: Start line {start_line} is beyond end of file ({len(lines)} lines)"
                 logger.warning(error_msg)
                 return f"Error: {error_msg}"
 
@@ -109,7 +109,7 @@ class CodeAgentTools:
             # 4. Write to Temp File
             temp_path = f"{path}.temp_lint"
             self.sandbox.files.write(temp_path, final_content)
-            logger.debug("Wrote temp file for linting: %s", temp_path)
+            logger.debug("ACI Tools: Wrote temp file for linting: %s", temp_path)
 
             # 5. Auto-Lint (Syntax Check)
             # We use py_compile to check for syntax errors before overwriting
@@ -119,22 +119,22 @@ class CodeAgentTools:
             if proc.exit_code != 0:
                 # Cleanup and Fail
                 self.sandbox.commands.run(f"rm {temp_path}")
-                error_msg = f"Edit Rejected: Syntax Error in generated code.\n{proc.stderr}"
-                logger.warning(error_msg)
+                error_msg = f"ACI Tools: Edit Rejected: Syntax Error in generated code.\n{proc.stderr}"
+                logger.warning(error_msg: )
                 return f"❌ {error_msg}"
 
             # 6. Commit Change
             self.sandbox.commands.run(f"mv {temp_path} {path}")
-            logger.info("Successfully edited file '%s'", path)
+            logger.info("ACI Tools: Successfully edited file '%s'", path)
             return "✅ Success: File edited and syntax verified."
 
         except Exception as e:
-            error_msg = f"Error editing file: {e}"
+            error_msg = f"ACI Tools: Error editing file: {e}"
             logger.error(error_msg, exc_info=True)
             return error_msg
 
     def _search_code(self, query: str, dir: str = ".") -> str:
-        logger.debug("Searching for '%s' in directory '%s'", query, dir)
+        logger.debug("ACI Tools: Searching for '%s' in directory '%s'", query, dir)
         # Implements the robust grep logic ignoring venv/git
         # -r: recursive
         # -n: line numbers
@@ -154,18 +154,18 @@ class CodeAgentTools:
         proc = self.sandbox.commands.run(cmd)
 
         if proc.exit_code != 0 and not proc.stdout:
-            logger.info("No matches found for query '%s'", query)
+            logger.info("ACI Tools: No matches found for query '%s'", query)
             return "No matches found."
 
-        logger.debug("Search returned %d characters", len(proc.stdout))
+        logger.debug("ACI Tools: Search returned %d characters", len(proc.stdout))
         return proc.stdout
 
     def _list_dir(self, path: str = ".") -> str:
-        logger.debug("Listing directory contents for '%s'", path)
+        logger.debug("ACI Tools: Listing directory contents for '%s'", path)
         # -F adds trailing / to dirs
         proc = self.sandbox.commands.run(f"ls -F {shlex.quote(path)}")
         if proc.exit_code != 0:
-            error_msg = f"Error listing directory: {proc.stderr}"
+            error_msg = f"ACI Tools: Error listing directory: {proc.stderr}"
             logger.warning(error_msg)
             return f"Error: {error_msg}"
 
@@ -175,10 +175,13 @@ class CodeAgentTools:
         filtered = [line for line in lines if not line.startswith("__") and not line.startswith(".git")]
 
         if len(filtered) > 50:
+            logger.info("ACI Tools: Directory listing truncated to 50 items")
             return "\n".join(filtered[:50]) + "\n... (Output truncated)"
+        logger.debug("ACI Tools: Listed %d items in directory '%s'", len(filtered), path)
         return "\n".join(filtered)
 
     def _run_shell(self, command: str) -> str:
+        logger.info("ACI Tools: Running shell command: %s", command)
         proc = self.sandbox.commands.run(command)
         return f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}\nExit Code: {proc.exit_code}"
 
