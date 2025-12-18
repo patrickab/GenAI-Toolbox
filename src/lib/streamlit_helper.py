@@ -2,14 +2,19 @@
 
 import base64
 from contextlib import contextmanager
+import hashlib
 import io
+import math
 import os
+from pathlib import Path
 import tempfile
 from typing import Iterator, Optional
 
 import fitz
+from PIL import Image
 import pymupdf4llm
 from rag_database.rag_database import DatabaseKeys
+import requests
 from st_copy import copy_button
 import streamlit as st
 from streamlit_ace import THEMES, st_ace
@@ -97,15 +102,15 @@ def model_selector(key: str) -> dict:
     model_options = []
     model_configs = {}
 
+    if MODELS_OLLAMA != []:
+        model_options.append("Ollama")
+        model_configs["Ollama"] = (MODELS_OLLAMA, "ollama/")
     if MODELS_GEMINI != []:
         model_options.append("Gemini")
         model_configs["Gemini"] = (MODELS_GEMINI, "gemini/")
     if MODELS_OPENAI != []:
         model_options.append("OpenAI")
         model_configs["OpenAI"] = (MODELS_OPENAI, "openai/")
-    if MODELS_OLLAMA != []:
-        model_options.append("Ollama")
-        model_configs["Ollama"] = (MODELS_OLLAMA, "ollama/")
     if MODELS_VLLM != []:
         model_options.append("VLLM")
         model_configs["VLLM"] = (MODELS_VLLM, "hosted_vllm/")
@@ -215,8 +220,109 @@ def streamlit_img_to_bytes(img: PasteResult) -> bytes:
     return buffer.getvalue()
 
 
+def downscale_img(
+    img: str | bytes | Path | Image.Image,
+    max_tokens: int,
+    grid_size: int = 28,
+    tokens_per_patch: int = 1,
+    row_overhead_tokens: int = 1,
+    output_format: str = "JPEG",
+    quality: int = 85,
+) -> str:
+    """
+    Preserves aspect ratio (area-scaling) and aligns to ViT patches (grid_size) for spatial accuracy.
+    Optimizes GPU inference efficiency within token budget.
+
+    JPEG: Fastest TTFT (optimized CPU decoding).
+    PNG: Max fidelity (lossless).
+    """
+    # 1. Normalize Input to PIL Image
+    if isinstance(img, Image.Image):
+        pass
+    elif hasattr(img, "image_data"):  # Streamlit PasteResult
+        img = Image.open(io.BytesIO(streamlit_img_to_bytes(img)))
+    elif isinstance(img, (str, Path)):
+        src = str(img)
+        if src.startswith("http"):
+            img = Image.open(io.BytesIO(requests.get(src, timeout=10).content))
+        elif src.startswith("data:image"):
+            img = Image.open(io.BytesIO(base64.b64decode(src.partition(",")[-1])))
+        else:
+            img = Image.open(Path(src))
+    else:
+        img = Image.open(io.BytesIO(img) if isinstance(img, bytes) else img)
+
+    # 2. Universal Resizing Logic
+    def get_tokens(w: int, h: int) -> int:
+        pw, ph = math.ceil(w / grid_size), math.ceil(h / grid_size)
+        return (pw * ph * tokens_per_patch) + (ph * row_overhead_tokens)
+
+    w, h = img.size
+    curr_tokens = get_tokens(w, h)
+
+    scale = 1.0
+    if curr_tokens > max_tokens:
+        scale = math.sqrt(max_tokens / curr_tokens)
+
+    # Snap to Grid (Preserving Aspect Ratio)
+    fw = max(grid_size, round((w * scale) / grid_size) * grid_size)
+    fh = max(grid_size, round((h * scale) / grid_size) * grid_size)
+
+    # Iterative refinement to guarantee budget compliance
+    while get_tokens(fw, fh) > max_tokens and (fw > grid_size or fh > grid_size):
+        if fw > fh:
+            fw -= grid_size
+        else:
+            fh -= grid_size
+
+    if (fw, fh) != (w, h):
+        img = img.resize((fw, fh), Image.Resampling.LANCZOS)
+
+    # 3. Configurable Encoding (Optimized for Localhost)
+    if output_format.upper() in ["JPEG", "JPG"]:
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        save_params = {"quality": quality, "optimize": False}
+    elif output_format.upper() == "PNG":
+        save_params = {"optimize": False}
+    else:
+        save_params = {"quality": quality}
+
+    buf = io.BytesIO()
+    img.save(buf, format=output_format, **save_params)
+    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    return f"data:image/{output_format.lower()};base64,{b64}"
+
+
+def get_img_hash(img: PasteResult) -> str:
+    """Generate SHA256 hash for a pasted image."""
+    img_bytes = streamlit_img_to_bytes(img)
+    return hashlib.sha256(img_bytes).hexdigest()
+
 def paste_img_button() -> PasteResult:
-    """Handle image pasting in Streamlit app."""
+    """Handle image pasting in Streamlit app with hashing and state control."""
+
+    if "sent_hashes" not in st.session_state:
+        st.session_state.sent_hashes = set()
+    if "imgs_sent" not in st.session_state:
+        st.session_state.imgs_sent = [EMPTY_PASTE_RESULT]
+
+    # 1. Resizing Configuration UI
+    st.session_state.use_resize = st.toggle("Enable Image Resizing", value=True, help="Downscale image to fit model token limits")
+
+    params = {}
+    if st.session_state.use_resize:
+        with st.expander("Compression Configurations"):
+            c1, c2 = st.columns(2)
+            params["max_tokens"] = c1.number_input("Max Tokens", value=800, step=100)
+            params["grid_size"] = c1.number_input("Grid Size", value=28, step=1)
+            params["tokens_per_patch"] = c1.number_input("Tokens per Patch", value=1)
+            params["output_format"] = c2.selectbox("Format", ["PNG", "JPEG"], index=0)
+            params["quality"] = c2.slider("Quality", 1, 100, 85)
+            params["row_overhead_tokens"] = c2.number_input("Row Overhead", value=1)
+    else:
+        # Defaults for raw conversion when resizing is disabled
+        params = {"output_format": "PNG", "quality": 85}
 
     if st.session_state.imgs_sent != [EMPTY_PASTE_RESULT]:
         with st.expander("Previously pasted images:"):
@@ -225,16 +331,12 @@ def paste_img_button() -> PasteResult:
                     with st.expander(f"Image {idx + 1}"):
                         st.image(img.image_data, caption=f"Image {idx + 1}")
 
-    # check wether streamlit background is in dark mode or light mode
-    bg_color = st.get_option("theme.base")  # 'light' or 'dark
+    # 2. Button Theme Logic
+    bg_color = st.get_option("theme.base")
     if bg_color == "dark":
-        button_color_bg = "#34373E"
-        button_color_txt = "#FFFFFF"
-        button_color_hover = "#45494E"
+        button_color_bg, button_color_txt, button_color_hover = "#34373E", "#FFFFFF", "#45494E"
     else:
-        button_color_bg = "#E6E6E6"
-        button_color_txt = "#000000"
-        button_color_hover = "#CCCCCC"
+        button_color_bg, button_color_txt, button_color_hover = "#E6E6E6", "#000000", "#CCCCCC"
 
     paste_result = paste_image_button(
         "Paste from clipboard",
@@ -243,15 +345,39 @@ def paste_img_button() -> PasteResult:
         hover_background_color=button_color_hover,
     )
 
-    if paste_result not in st.session_state.imgs_sent:
-        st.session_state.pasted_image = paste_result
-        st.image(paste_result.image_data)
-        return paste_result
-
-    else:  # set pasted_image to None
+    def return_empty() -> PasteResult:
         st.session_state.pasted_image = EMPTY_PASTE_RESULT
+        st.session_state.api_img = None
         return EMPTY_PASTE_RESULT
 
+    is_image_pasted = paste_result is not None and paste_result.image_data is not None
+    if not is_image_pasted:
+        return return_empty()
+
+    img_hash = get_img_hash(paste_result)
+    if img_hash in st.session_state.sent_hashes:
+        return return_empty()
+
+    # 3. Processing and State Control
+    if st.session_state.use_resize:
+        st.session_state.api_img = downscale_img(paste_result.image_data, **params)
+        st.image(paste_result.image_data, caption="Pasted Image (original)")
+        st.image(st.session_state.api_img, caption="Pasted Image (resized)")
+    else:
+        # Raw conversion to Base64 without scaling
+        img = Image.open(io.BytesIO(streamlit_img_to_bytes(paste_result)))
+        if img.mode != "RGB" and params["output_format"] == "JPEG":
+            img = img.convert("RGB")
+
+        buf = io.BytesIO()
+        img.save(buf, format=params["output_format"], quality=params["quality"])
+        st.image(img, caption="Pasted Image")
+
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        st.session_state.api_img = f"data:image/{params['output_format'].lower()};base64,{b64}"
+
+    st.session_state.pasted_image = paste_result
+    return paste_result
 
 def editor(text_to_edit: str, language: str, key: str, height: Optional[int] = None) -> str:
     """Create an ACE editor for displaying OCR extracted text."""

@@ -13,11 +13,11 @@ from lib.streamlit_helper import (
     AVAILABLE_PROMPTS,
     _extract_text_from_pdf,
     _non_streaming_api_query,
+    get_img_hash,
     llm_params_sidebar,
     model_selector,
     paste_img_button,
     render_messages,
-    streamlit_img_to_bytes,
 )
 from pages.RAG_Workspace import init_rag_workspace, rag_sidebar
 
@@ -74,7 +74,7 @@ def chat_interface() -> None:
 
                     system_prompt = system_prompt + "\n\n" + SYS_RAG + "\n\n# RAG Retrieved Context:\n" + retrieved_information
 
-                img: PasteResult = st.session_state.pasted_image # defaults to EMPTY_PASTE_RESULT if no image pasted
+                api_img: PasteResult = st.session_state.api_img
                 client: LLMClient = st.session_state.client
                 kwargs = {
                     "temperature": st.session_state.llm_temperature,
@@ -87,15 +87,21 @@ def chat_interface() -> None:
                         model=st.session_state.selected_model,
                         user_msg=prompt,
                         system_prompt=system_prompt,
-                        img=streamlit_img_to_bytes(img) if img.image_data is not None else None,
+                        img=api_img,
                         stream=True,
                         **kwargs,
                     )
                 )
 
                 # Clear pasted image after use
-                st.session_state.last_sent_image = img
-                st.session_state.pasted_image = EMPTY_PASTE_RESULT
+                if api_img:
+                    img_hash = get_img_hash(st.session_state.pasted_image)
+                    st.session_state.sent_hashes.add(img_hash)
+                    st.session_state.imgs_sent.append(st.session_state.pasted_image)
+                    st.session_state.api_img = None
+                    st.session_state.pasted_image = EMPTY_PASTE_RESULT
+                    st.rerun()
+
                 # Caption user message
                 if st.session_state.bool_caption_usr_msg:
                     caption = _non_streaming_api_query(
