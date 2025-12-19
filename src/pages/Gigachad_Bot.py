@@ -121,7 +121,7 @@ def gigachad_sidebar() -> None:
     with st.sidebar:
 
         #------------------------------------------------- Model & Prompt Selection ------------------------------------------------- #
-        model_selector(key="gigachad_bot")
+        st.session_state.selected_model = model_selector(key="gigachad_bot")
 
         st.session_state.selected_prompt = st.selectbox(
             "System prompt",

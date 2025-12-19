@@ -127,7 +127,7 @@ def model_selector(key: str) -> dict:
     )
     models_list, litellm_prefix = model_configs[selected_provider]
 
-    st.session_state.selected_model = st.selectbox(
+    return st.selectbox(
         label=f"Models ({selected_provider})",
         options=models_list,
         format_func=lambda model: model.replace(litellm_prefix, ""),
