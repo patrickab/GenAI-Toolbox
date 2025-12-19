@@ -18,7 +18,6 @@ class AgentCommand(BaseModel, ABC):
     Input:
         executable: str
            - preinstalled CLI executable name
-           - non-empty string
         workspace: Path
            - absolute or relative filesystem path
            - must exist before execution
@@ -28,13 +27,6 @@ class AgentCommand(BaseModel, ABC):
         env_vars: dict[str, str] | None
            - environment variable overrides
            - merged over os.environ
-
-    Output:
-        None
-
-    Errors:
-        ValidationError
-           - invalid field types
     """
 
     executable: str = Field(..., description="CLI executable name")
@@ -133,7 +125,7 @@ class CodeAgent(ABC, Generic[TCommand]):
             except git.GitCommandError:
                 st.warning(f"Git pull failed for branch '{branch}'. Using local state.")
 
-            self._maybe_install_dependencies(workspace)
+            self._try_install_dependencies(workspace)
         except git.GitCommandError as exc:
             st.error(f"Git operation failed: {exc}")
             raise
@@ -143,22 +135,15 @@ class CodeAgent(ABC, Generic[TCommand]):
 
         return workspace
 
-    def _maybe_install_dependencies(self, workspace: Path) -> None:
-        """Best-effort dependency installation; non-fatal on failure.
+    def _try_install_dependencies(self, workspace: Path) -> None:
+        """
+        Best-effort dependency installation; non-fatal on failure.
+        Assumes `uv` installed on system PATH.
 
         Input:
             workspace: Path
                - repository root path
                - must exist
-
-        Output:
-            None
-
-        Errors:
-            None
-
-        Side Effects:
-            - may run pip install commands
         """
         requirements: Path = workspace / "requirements.txt"
         pyproject: Path = workspace / "pyproject.toml"
@@ -189,8 +174,7 @@ class CodeAgent(ABC, Generic[TCommand]):
 
         Input:
             command: TCommand
-               - fully constructed args
-               - workspace directory set
+               - fully configured agent command
 
         Output:
             process: subprocess.Popen[bytes]
@@ -231,12 +215,6 @@ class CodeAgent(ABC, Generic[TCommand]):
                - agent-specific command model
                - mutated with task context
 
-        Output:
-            None
-
-        Errors:
-            Implementation-defined
-
         Side Effects:
             - may start external processes
         """
@@ -253,12 +231,6 @@ class CodeAgent(ABC, Generic[TCommand]):
             command: TCommand
                - fully configured command model
                - ready for execution
-
-        Errors:
-            None
-
-        Side Effects:
-            - renders Streamlit widgets
         """
         raise NotImplementedError
 
@@ -278,6 +250,7 @@ class AiderCommand(AgentCommand):
 
     model_architect: str = Field(..., description="Architect LLM identifier")
     model_editor: str = Field(..., description="Editor LLM identifier")
+    reasoning_effort: str = Field(default="high", description="Reasoning effort: low|medium|high")
     edit_format: str = Field(default="diff", description="Edit format: diff|whole|udiff")
     no_commit: bool = Field(default=True, description="Disable git commits")
     map_tokens: int = Field(default=4096, description="Context map tokens")
@@ -292,6 +265,8 @@ class AiderCommand(AgentCommand):
                 self.model_architect,
                 "--editor-model",
                 self.model_editor,
+                "--reasoning-effort",
+                self.reasoning_effort,
                 "--edit-format",
                 self.edit_format,
                 "--map-tokens",
@@ -306,62 +281,89 @@ class AiderCommand(AgentCommand):
         return base
 
 
-class AiderCodeAgent(CodeAgent[AiderCommand]):
+class Aider(CodeAgent[AiderCommand]):
     """Autonomous Aider Code Agent."""
 
     def ui_define_command(self) -> AiderCommand:
         """Define the Aider command with Streamlit UI."""
-        command = AiderCommand(executable="aider", args=[], workspace=self.path_agent_workspace)
 
-        st.markdown("## Select Architect Model")
-        command.model_architect = model_selector(key="code_agent_architect")
+        with st.expander("", expanded=True):
+            st.markdown("# Model Control")
+            st.markdown("### Reasoning Effort")
+            reasoning_effort = st.selectbox(
+                "Reasoning effort",
+                options=["low", "medium", "high"],
+                index=2,
+                key="aider_reasoning_effort",
+            )
 
-        st.markdown("## Select Editor Model")
-        command.model_editor = model_selector(key="code_agent_editor")
+            st.markdown("### Architect Model")
+            model_architect = model_selector(key="code_agent_architect")
+
+            st.markdown("### Editor Model")
+            model_editor = model_selector(key="code_agent_editor")
+
 
         st.markdown("---")
-        st.markdown("## Edit Format")
-        command.edit_format = st.selectbox(
-            "Select Edit Format",
-            options=["diff", "whole", "udiff"],
-            index=0,
-            key="aider_edit_format",
-        )
+        with st.expander("", expanded=False):
+            st.markdown("# Advanced Command Control")
+            st.markdown("### Edit Format")
+            edit_format = st.selectbox(
+                "Select Edit Format",
+                options=["diff", "whole", "udiff"],
+                index=0,
+                key="aider_edit_format",
+            )
 
-        st.markdown("## Map Tokens")
-        command.map_tokens = st.selectbox(
-            "Context map tokens",
-            options=[1024, 2048, 4096, 8192],
-            index=2,
-            key="aider_map_tokens",
-        )
+            st.markdown("### Token Controls")
+            map_tokens = st.selectbox(
+                "Context map tokens",
+                options=[1024, 2048, 4096, 8192],
+                index=0,
+                key="aider_map_tokens",
+            )
 
-        st.markdown("## Flags")
-        command.no_commit = st.checkbox(
-            "Disable git commits (--no-commit)",
-            value=True,
-            key="aider_no_commit",
-        )
+            st.markdown("### Flags")
+            no_commit = st.toggle(
+                "Disable git commits (--no-commit)",
+                value=True,
+                key="aider_no_commit",
+            )
 
-        extra_flags_str: str = st.text_input(
-            "Extra aider flags (advanced)",
-            value="",
-            help="Raw aider flags, space-separated; do not include models or edit-format here.",
-            key="aider_extra_flags",
-        )
-        command.extra_flags = shlex.split(extra_flags_str) if extra_flags_str.strip() else []
+            extra_flags_str: str = st.text_input(
+                "Extra aider flags (advanced)",
+                value="",
+                help="Raw aider flags, space-separated; do not include models or edit-format here.",
+                key="aider_extra_flags",
+            )
+            extra_flags = shlex.split(extra_flags_str) if extra_flags_str.strip() else []
 
-        st.markdown("## Environment")
-        ollama_base: str = st.text_input(
-            "OLLAMA_API_BASE (optional)",
-            value=os.environ.get("OLLAMA_API_BASE", ""),
-            key="aider_ollama_api_base",
-        )
+            st.markdown("## Environment")
+            ollama_base: str = st.text_input(
+                "OLLAMA_API_BASE (optional)",
+                value=os.environ.get("OLLAMA_API_BASE", ""),
+                key="aider_ollama_api_base",
+            )
 
         env_vars: Dict[str, str] = {}
         if ollama_base.strip():
             env_vars["OLLAMA_API_BASE"] = ollama_base.strip()
-        command.env_vars = env_vars or None
+        env_vars = env_vars or None
+        command = AiderCommand(
+            # Base class
+            executable="aider",
+            workspace=self.path_agent_workspace,
+            args=extra_flags,
+            env_vars=env_vars,
+            # Aider-specific
+            model_architect=model_architect,
+            model_editor=model_editor,
+            reasoning_effort=reasoning_effort,
+            edit_format=edit_format,
+            map_tokens=map_tokens,
+            extra_flags=extra_flags,
+            no_commit=no_commit,
+        )
 
         return command
 
@@ -400,20 +402,34 @@ def main() -> None:
     st.set_page_config(page_title="Agent-in-a-Box", layout="wide")
 
     with st.sidebar:
-        st.markdown("## Repository")
-        repo_url: str = st.text_input("GitHub Repository URL", key="repo_url")
-        branch: str = st.text_input("Branch", value="main", key="branch")
-        st.markdown("---")
+        if "selected_agent" not in st.session_state:
+            st.markdown("## Agent Controls")
+            selected_agent_name: str = st.selectbox("Select Code Agent", options=agent_subclass_names, key="code_agent_selector")
+            repo_url: str = st.text_input("GitHub Repository URL", value="https://github.com/patrickab/gigachad-bot", key="repo_url")
+            if repo_url:
 
-        if not repo_url or not branch:
-            st.warning("Please provide both Repository URL and Branch to proceed.")
-            st.stop()
+                if "branches" not in st.session_state:
+                    st.session_state.branches = [
+                        ref.split('\t')[1].replace('refs/heads/', '')
+                        for ref in git.Git().ls_remote('--heads', repo_url).splitlines()
+                    ]
 
-        st.markdown("## Agent")
-        selected_agent_name: str = st.selectbox("Select Code Agent", options=agent_subclass_names, key="code_agent_selector")
+                branch = st.selectbox("Select Branch", options=st.session_state.branches, index=0, key="branch_selector")
 
-        selected_agent: CodeAgent[Any] = get_agent(agent_type=selected_agent_name, repo_url=repo_url, branch=branch)
-        command: AgentCommand = selected_agent.ui_define_command()
+            def init_agent() -> None:
+                """Initialize and store agent in session state."""
+                selected_agent: CodeAgent[Any] = get_agent(agent_type=selected_agent_name, repo_url=repo_url, branch=branch)
+                st.session_state.selected_agent = selected_agent
+
+            if repo_url and branch:
+                st.button("Initialize Agent", key="init_agent_button", on_click=init_agent)
+
+        else:
+            # Agent in session state - configure command
+            selected_agent: CodeAgent[Any] = st.session_state.selected_agent
+            command: AgentCommand = selected_agent.ui_define_command()
+            if st.button("Clear Agent", key="clear_agent_button"):
+                del st.session_state.selected_agent
 
     with st._bottom:
         task: Optional[str] = st.chat_input("Assign a task to the agent...")
@@ -423,7 +439,7 @@ def main() -> None:
             st.markdown(task)
 
         with st.chat_message("assistant"):
-            selected_agent.run(task=task, command=command)  # type: ignore[arg-type]
+            selected_agent.run(task=task, command=command)
             diff: str = selected_agent.get_diff()
             if diff:
                 st.markdown("### Git Diff")
