@@ -198,11 +198,21 @@ class DockerSandbox:
             create_cmd = [
                 "docker",
                 "create",
+                "--tty",
+                "--interactive",
                 "--runtime=runsc",
                 "--init",
                 "--user=1000:1000",
                 "-w",
                 "/app",
+                "-v",
+                "/usr/bin:/usr/bin:ro",
+                "-v",
+                "/usr/lib:/usr/lib:ro",
+                "-v",
+                "/lib:/lib:ro",
+                "-v",
+                "/usr/local/bin:/usr/local/bin:ro",
                 "agent-sandbox:latest",
                 "bash",
                 "-c",
@@ -223,8 +233,11 @@ class DockerSandbox:
                 raise ContainerRuntimeError(f"Failed to copy code into container:\n{cp_in_proc.stderr}")
             self.logger.debug("Copied code_repo_path '%s' into container.", code_repo_path)
 
-            # Step 3: Start container (execute command) & capture output
-            start_cmd = ["docker", "start", "-a", container_id]
+            # Step 3:
+            #   - Initialize interactive docker process
+            #   - Execute command
+            #   - Capture output
+            start_cmd = ["docker", "start", "-a", "-i", container_id]
             self.logger.info("Starting container: %s", start_cmd)
             start_proc = subprocess.run(start_cmd, capture_output=True, text=True)
             stdout = start_proc.stdout
