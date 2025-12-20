@@ -208,10 +208,10 @@ class CodeAgent(ABC, Generic[TCommand]):
         """
         injected_task = [token.format(task=task) for token in command.task_injection_template]
         command.args += injected_task
-
         with st.spinner("Starting aider in terminal or browser; interact there."):
             process = self._execute_agent_command(command)
             st.caption(f"Spawned process PID: {process.pid}")
+            process.wait()
 
     @abstractmethod
     def ui_define_command(self) -> TCommand:
