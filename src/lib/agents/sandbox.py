@@ -201,8 +201,6 @@ class DockerSandbox:
                 "--runtime=runsc",
                 "--init",
                 "--user=1000:1000",
-                "--memory=8g",
-                "--cpus=4.0",
                 "-w",
                 "/app",
                 "agent-sandbox:latest",

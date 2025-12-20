@@ -8,15 +8,10 @@ import git
 from pydantic import BaseModel, Field
 import streamlit as st
 
+from lib.agents.sandbox import DockerSandbox, ExecutionResult
 from lib.streamlit_helper import model_selector
 
-ENV_VARS_AIDER = {
-    "OLLAMA_API_BASE": "http://127.0.0.1:11434",
-    "GIT_AUTHOR_NAME": "patrickab",
-    "GIT_AUTHOR_EMAIL": "patrick.a.bitzer@gmail.com",
-    "GIT_COMMITTER_NAME":"patrickab",
-    "GIT_COMMITTER_EMAIL":"patrick.a.bitzer@gmail.com",
-}
+ENV_VARS_AIDER = {"OLLAMA_API_BASE": "http://127.0.0.1:11434"}
 
 DEFAULT_ARGS_AIDER = ["--dark-mode", "--code-theme", "inkpot", "--pretty"]
 
@@ -170,34 +165,40 @@ class CodeAgent(ABC, Generic[TCommand]):
             # ignore installation failures; agent expected to handle env issues
             return
 
-    def _execute_agent_command(self, command: TCommand) -> subprocess.Popen[bytes]:
-        """Execute the agent command in its workspace using subprocess.
+    def _execute_agent_command(self, command: TCommand) -> ExecutionResult:
+        """Execute the agent command in its workspace using DockerSandbox.
 
         Input:
             command: TCommand
                - fully configured agent command
 
         Output:
-            process: subprocess.Popen[bytes]
-               - running child process handle
-               - stdout/stderr inherited by parent
+            result: ExecutionResult
+               - captured stdout/stderr and exit code
+               - artifacts_path with container /app contents
 
         Side Effects:
-            - starts external process
+            - runs agent inside secure Docker sandbox
         """
+        env_parts: List[str] = []
         full_env: Dict[str, str] = dict(os.environ)
         if command.env_vars:
             full_env.update(command.env_vars)
+            for k, v in command.env_vars.items():
+                env_parts.append(f"{k}={v}")
 
-        full_cmd: List[str] = [command.executable, *command.construct_args()]
+        # Build shell command string: env vars + executable + args
+        arg_list: List[str] = [command.executable, *command.construct_args()]
+        shell_cmd = " ".join([*env_parts, subprocess.list2cmdline(arg_list)])
 
+        sandbox = DockerSandbox()
         try:
-            process = subprocess.Popen(full_cmd, cwd=str(command.workspace), env=full_env)
-        except OSError as exc:
-            st.error(f"Failed to start agent process: {exc}")
+            result = sandbox.run(code_repo_path=str(command.workspace), command=shell_cmd)
+        except Exception as exc:
+            st.error(f"Failed to run agent in sandbox: {exc}")
             raise
 
-        return process
+        return result
 
     def run(self, command: TCommand, task: Optional[str] = None) -> None:
         """Combines task with command according to agent-specific syntax.
@@ -211,15 +212,13 @@ class CodeAgent(ABC, Generic[TCommand]):
                - mutated with task context
 
         Side Effects:
-            - may start external processes
+            - runs agent inside secure Docker sandbox
         """
         if task:
             injected_task = [token.format(task=task) for token in command.task_injection_template]
             command.args += injected_task
-        with st.spinner("Starting aider in terminal or browser; interact there."):
-            process = self._execute_agent_command(command)
-            st.caption(f"Spawned process PID: {process.pid}")
-            process.wait()
+        with st.spinner("Running agent in secure sandbox; interact via its UI if opened."):
+            self._execute_agent_command(command)
 
     @abstractmethod
     def ui_define_command(self) -> TCommand:
