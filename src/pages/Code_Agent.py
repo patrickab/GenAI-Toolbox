@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 import os
 from pathlib import Path
-import shlex
 import subprocess
 from typing import Any, Dict, Generic, List, Literal, Optional, TypeVar
 
@@ -10,6 +9,9 @@ from pydantic import BaseModel, Field
 import streamlit as st
 
 from lib.streamlit_helper import model_selector
+
+ENV_VARS_AIDER = {"OLLAMA_API_BASE": "http://127.0.0.1:11434"}
+DEFAULT_ARGS_AIDER = ["--dark-mode", "--no-auto-commits", "--code-theme", "inkpot", "--pretty"]
 
 
 class AgentCommand(BaseModel, ABC):
@@ -33,6 +35,7 @@ class AgentCommand(BaseModel, ABC):
     workspace: Path = Field(default_factory=Path.cwd, description="Agent workspace directory")
     args: List[str] = Field(default_factory=list, description="CLI arguments excluding executable")
     env_vars: Optional[Dict[str, str]] = Field(default=None, description="Environment variable overrides")
+    task_injection_template: List[str] = Field(default_factory=list, description="Task injection template")
 
     def _snake_to_kebab(self, s: str) -> str:
         """Convert snake_case to kebab-case."""
@@ -42,10 +45,11 @@ class AgentCommand(BaseModel, ABC):
         """Construct aider argument list."""
         # This model dump will include all class values of the subclass
         # The fields is a dict of all class attributes intended for CLI
-        fields = self.model_dump(exclude={"executable", "workspace","args", "env_vars"})
-        self.args = [
+        fields = self.model_dump(exclude={"executable", "workspace", "args", "env_vars"})
+        args = [
             item for k, v in fields.items() for item in ([f"--{self._snake_to_kebab(k)}"] + ([] if isinstance(v, bool) else [str(v)]))
         ]
+        self.args += args
 
 
 TCommand = TypeVar("TCommand", bound=AgentCommand)
@@ -175,9 +179,8 @@ class CodeAgent(ABC, Generic[TCommand]):
             - starts external process
         """
         full_env: Dict[str, str] = dict(os.environ)
-        # NOTE: disable for now
-        # if command.env_vars:
-        #    full_env.update(command.env_vars)
+        if command.env_vars:
+            full_env.update(command.env_vars)
 
         full_cmd: List[str] = [command.executable, *command.construct_args()]
 
@@ -189,7 +192,6 @@ class CodeAgent(ABC, Generic[TCommand]):
 
         return process
 
-    @abstractmethod
     def run(self, task: str, command: TCommand) -> None:
         """Combines task with command according to agent-specific syntax.
 
@@ -204,7 +206,12 @@ class CodeAgent(ABC, Generic[TCommand]):
         Side Effects:
             - may start external processes
         """
-        raise NotImplementedError
+        injected_task = [token.format(task=task) for token in command.task_injection_template]
+        command.args += injected_task
+
+        with st.spinner("Starting aider in terminal or browser; interact there."):
+            process = self._execute_agent_command(command)
+            st.caption(f"Spawned process PID: {process.pid}")
 
     @abstractmethod
     def ui_define_command(self) -> TCommand:
@@ -234,12 +241,18 @@ class CodeAgent(ABC, Generic[TCommand]):
 class AiderCommand(AgentCommand):
     """Aider-specific command definition."""
 
+    # Baseclass constants
+    executable: str = "aider"
+    task_injection_template: List[str] = ["--message", "{task}"]
+
+    # Variables
     model: str = Field(..., description="Architect LLM identifier")
     editor_model: str = Field(..., description="Editor LLM identifier")
     reasoning_effort: Literal["low", "medium", "high"] = Field(default="high", description="Reasoning effort")
     edit_format: Literal["diff", "whole", "udiff"] = Field(default="diff", description="Edit format")
     no_commit: bool = Field(default=True, description="Disable git commits")
     map_tokens: Literal[1024, 2048, 4096, 8192] = Field(default=4096, description="Context map tokens")
+
 
 class Aider(CodeAgent[AiderCommand]):
     """Aider Code Agent."""
@@ -253,66 +266,32 @@ class Aider(CodeAgent[AiderCommand]):
             model_editor = model_selector(key="code_agent_editor")
 
         st.markdown("---")
-        st.markdown("# Advanced Command Control")
-        with st.expander("", expanded=False):
+        st.markdown("# Command Control")
+        with st.expander("", expanded=True):
             edit_format = st.selectbox("Select Edit Format", ["diff", "whole", "udiff"], index=0, key="aider_edit_format")
             map_tokens = st.selectbox("Context map tokens", [1024, 2048, 4096, 8192], index=0, key="aider_map_tokens")
-            no_commit = st.toggle("Disable git commits (--no-commit)", value=True, key="aider_no_commit")
+            no_commit = st.toggle("--no-commit", value=True, key="aider_no_commit")
 
-            common_flags = {
-                "--no-auto-commits": "Disable automatic commits",
-                "--dark-mode": "Use dark mode for LLM responses",
-                "--yes": "Automatically say 'yes' to all prompts",
-                "--no-pretty": "Disable pretty-printing of diffs",
-                "--message-history": "Keep message history in chat",
-                "--cache-prompts": "Enable caching of prompts"
-            }
-            selected_flags = st.multiselect(
+            common_flags = ["--architect", "--no-auto-commits", "--no-stream", "--browser", "--yes", "--cache-prompts"]
+            flags = st.multiselect(
                 "Common aider flags",
-                options=list(common_flags.keys()),
-                format_func=lambda x: f"{x} - {common_flags[x]}",
-                key="aider_common_flags"
+                options=common_flags,
+                key="aider_common_flags",
+                default=[common_flags[0], common_flags[1]],
+                accept_new_options=True,
             )
-
-            extra_flags_str = st.text_input(
-                "Extra aider flags (advanced)",
-                value="",
-                help="Raw aider flags, space-separated; do not include models or edit-format here.",
-                key="aider_extra_flags",
-            )
-            extra_flags = shlex.split(extra_flags_str) if extra_flags_str.strip() else []
 
         return AiderCommand(
-            executable="aider",
             workspace=self.path_agent_workspace,
-            args=selected_flags + extra_flags,
+            args=flags + DEFAULT_ARGS_AIDER,
+            env_vars=ENV_VARS_AIDER,
             model=model_architect,
             editor_model=model_editor,
             reasoning_effort=reasoning_effort,
             edit_format=edit_format,
             no_commit=no_commit,
             map_tokens=map_tokens,
-            common_flags=selected_flags,
-            extra_flags=extra_flags,
         )
-
-
-
-    def run(self, task: str, command: AiderCommand) -> None:
-        """Executes the aider agent with task and UI feedback."""
-        if not task.strip():
-            st.warning("Task is empty; nothing to run.")
-            return
-
-        command.args.extend(["--message", task])
-
-        with st.spinner("Starting aider in terminal or browser; interact there."):
-            process = self._execute_agent_command(command)
-
-        st.info(
-            "Aider started. Interact with it in your terminal or configured UI. Return here after completion to view the git diff."
-        )
-        st.caption(f"Spawned process PID: {process.pid}")
 
 
 # Agent registry: dynamic discovery for extensible multi-agent support
@@ -327,12 +306,11 @@ def get_agent(agent_type: str, repo_url: str, branch: str) -> CodeAgent[Any]:
     agent_cls: type[CodeAgent[Any]] = agent_subclass_dict[agent_type]
     return agent_cls(repo_url, branch)
 
+
 def get_remote_branches(repo_url: str) -> list[str]:
     """Extract branch names from remote repository."""
-    return [
-        ref.split("\t")[1].replace("refs/heads/", "")
-        for ref in git.Git().ls_remote("--heads", repo_url).splitlines()
-    ]
+    return [ref.split("\t")[1].replace("refs/heads/", "") for ref in git.Git().ls_remote("--heads", repo_url).splitlines()]
+
 
 def main() -> None:
     """Streamlit entrypoint for multi-agent code workspace."""
