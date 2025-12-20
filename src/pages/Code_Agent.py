@@ -259,6 +259,21 @@ class Aider(CodeAgent[AiderCommand]):
             map_tokens = st.selectbox("Context map tokens", [1024, 2048, 4096, 8192], index=0, key="aider_map_tokens")
             no_commit = st.toggle("Disable git commits (--no-commit)", value=True, key="aider_no_commit")
 
+            common_flags = {
+                "--no-auto-commits": "Disable automatic commits",
+                "--dark-mode": "Use dark mode for LLM responses",
+                "--yes": "Automatically say 'yes' to all prompts",
+                "--no-pretty": "Disable pretty-printing of diffs",
+                "--message-history": "Keep message history in chat",
+                "--cache-prompts": "Enable caching of prompts"
+            }
+            selected_flags = st.multiselect(
+                "Common aider flags",
+                options=list(common_flags.keys()),
+                format_func=lambda x: f"{x} - {common_flags[x]}",
+                key="aider_common_flags"
+            )
+
             extra_flags_str = st.text_input(
                 "Extra aider flags (advanced)",
                 value="",
@@ -267,19 +282,21 @@ class Aider(CodeAgent[AiderCommand]):
             )
             extra_flags = shlex.split(extra_flags_str) if extra_flags_str.strip() else []
 
-        command = AiderCommand(
+        return AiderCommand(
             executable="aider",
             workspace=self.path_agent_workspace,
-            args=extra_flags,
+            args=selected_flags + extra_flags,
             model=model_architect,
             editor_model=model_editor,
             reasoning_effort=reasoning_effort,
             edit_format=edit_format,
-            map_tokens=map_tokens,
             no_commit=no_commit,
+            map_tokens=map_tokens,
+            common_flags=selected_flags,
+            extra_flags=extra_flags,
         )
 
-        return command
+
 
     def run(self, task: str, command: AiderCommand) -> None:
         """Executes the aider agent with task and UI feedback."""
