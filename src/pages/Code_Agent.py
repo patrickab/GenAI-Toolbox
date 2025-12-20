@@ -49,7 +49,7 @@ class AgentCommand(BaseModel, ABC):
         args = [
             item for k, v in fields.items() for item in ([f"--{self._snake_to_kebab(k)}"] + ([] if isinstance(v, bool) else [str(v)]))
         ]
-        return args +self.args
+        return args + self.args
 
 
 TCommand = TypeVar("TCommand", bound=AgentCommand)
@@ -321,7 +321,7 @@ def main() -> None:
         if "selected_agent" not in st.session_state:
             st.markdown("## Agent Controls")
             selected_agent_name: str = st.selectbox("Select Code Agent", options=agent_subclass_names, key="code_agent_selector")
-            repo_url: str = st.text_input("GitHub Repository URL", value="https://github.com/patrickab/gigachad-bot", key="repo_url")
+            repo_url = st.text_input("GitHub Repository URL", value="https://github.com/patrickab/gigachad-bot", key="repo_url")
             if repo_url:
                 if "branches" not in st.session_state:
                     st.session_state.branches = get_remote_branches(repo_url)
@@ -339,9 +339,32 @@ def main() -> None:
         else:
             # Agent in session state - configure command
             selected_agent: CodeAgent[Any] = st.session_state.selected_agent
+
+            # Data Extraction
+            repo_url = selected_agent.repo_url
+            branch = selected_agent.branch
+            repo_slug = "/".join(repo_url.split("/")[-2:])  # Extracts 'owner/repo'
+            branch_url = f"{repo_url}/tree/{branch}"
+
+            st.markdown("# Agent Info")
+            with st.expander("", expanded=True):
+                col1, col2 = st.columns([1, 4])
+
+                with col1:
+                    st.write("**Agent**")
+                    st.write("**Source**")
+                    st.write("**Workspace**")
+
+                with col2:
+                    st.markdown(f"{selected_agent.__class__.__name__}")
+                    st.markdown(f"[{repo_slug}]({repo_url}) / [{branch}]({branch_url})")
+                    st.markdown(f"`{selected_agent.path_agent_workspace}`")
+
+                if st.button("Reset Agent", use_container_width=True):
+                    del st.session_state.selected_agent
+                    st.rerun()
+
             command: AgentCommand = selected_agent.ui_define_command()
-            if st.button("Clear Agent", key="clear_agent_button"):
-                del st.session_state.selected_agent
 
     with st._bottom:
         task: Optional[str] = st.chat_input("Assign a task to the agent...")
