@@ -1,3 +1,18 @@
+"""Secure Docker-based sandbox for agent code execution.
+
+Input:
+    None
+
+Output:
+    DockerSandbox
+       - isolated execution environment
+       - gVisor-based container runtime
+
+Side Effects:
+    - runs docker info and docker images
+    - builds agent-sandbox:latest image on demand
+"""
+
 from dataclasses import dataclass
 import logging
 import os
@@ -6,44 +21,53 @@ import tempfile
 from typing import Optional
 
 
-#
-# Custom Exceptions
-#
 class SecurityEnvironmentError(Exception):
-    """Raised if gVisor or rootless Docker is not configured properly."""
+    """Signal misconfigured Docker security environment."""
 
 
 class ContainerRuntimeError(Exception):
-    """Raised if the container execution fails or exits with non-zero code."""
+    """Signal container lifecycle or execution failure."""
 
 
 class ResourceLimitExceeded(Exception):
-    """Raised if container resource limits are exceeded (e.g. OOM, CPU throttling)."""
+    """Signal container resource limit violation."""
 
 
 class SecurityViolation(Exception):
-    """Raised for forbidden or unexpected container behaviors."""
+    """Signal forbidden or unexpected container behavior."""
 
 
-#
-# Data Class to hold execution results
-#
 @dataclass
 class ExecutionResult:
+    """Container execution result record.
+
+    Input:
+        stdout: str
+           - captured standard output
+           - UTF-8 decoded text
+        stderr: str
+           - captured standard error
+           - UTF-8 decoded text
+        exit_code: int
+           - container process exit status
+           - zero on success
+        artifacts_path: str
+           - absolute filesystem path
+           - directory containing copied /app artifacts
+
+    Output:
+        instance: ExecutionResult
+           - immutable snapshot of container run
+           - suitable for logging and UI display
+    """
     stdout: str
     stderr: str
     exit_code: int
     artifacts_path: str
 
 
-#
-# Environment / Image Setup Functions
-#
 def check_docker_security() -> None:
-    """
-    Validate that Docker is running rootless and supports gVisor (runsc).
-    Raises SecurityEnvironmentError if not compliant.
-    """
+    """Docker security capability validation."""
     info = subprocess.run(["docker", "info"], capture_output=True, text=True)
     if info.returncode != 0:
         raise SecurityEnvironmentError("Failed to run 'docker info'. Docker may not be installed or running.")
@@ -67,7 +91,6 @@ def build_sandbox_image() -> None:
     if check_image.returncode != 0:
         raise SecurityEnvironmentError(f"Failed checking for agent-sandbox:latest image.\n{check_image.stderr}")
 
-    # Build the image only if no local agent-sandbox:latest is found
     if not check_image.stdout.strip():
         dockerfile_content = """\
 FROM python:3.11-slim
@@ -90,9 +113,6 @@ USER sandbox_user
                 raise SecurityEnvironmentError(f"Failed to build agent-sandbox image:\n{build_proc.stderr}")
 
 
-#
-# Main Sandbox Class
-#
 class DockerSandbox:
     """
     DockerSandbox:
@@ -110,6 +130,13 @@ class DockerSandbox:
     """
 
     def __init__(self) -> None:
+        """Sandbox initialization and security bootstrap.
+
+        Side Effects:
+            - configures module logger
+            - validates Docker security configuration
+            - ensures agent-sandbox:latest image exists
+        """
         self.logger = logging.getLogger(__name__)
         self.logger.debug("Initializing DockerSandbox...")
         # Verify environment security prerequisites
@@ -118,25 +145,56 @@ class DockerSandbox:
         self.logger.debug("Initialization complete. Rootless Docker and runsc found.")
 
     def run(self, code_repo_path: str, command: str) -> ExecutionResult:
-        """
-        Execute untrusted code in a newly created Docker container using runsc gVisor.
+        """Isolated container execution with gVisor and rootless Docker.
 
-        Steps:
-          1. docker create (with resource limits)
-          2. docker cp (transfer code in)
-          3. docker start -a (run code)
-          4. docker cp (retrieve artifacts)
-          5. docker rm -f (cleanup)
+        Input:
+            code_repo_path: str
+               - host filesystem path to repository root
+               - readable directory containing agent workspace
+            command: str
+               - shell command string executed as `bash -c`
+               - interpreted inside /app working directory
 
-        Raises ContainerRuntimeError on non-zero exit or operational failure.
+        Output:
+            result: ExecutionResult
+               - captured stdout and stderr from container
+               - exit_code reflecting process status
+               - artifacts_path pointing to copied /app contents
+
+        Side Effects:
+            - creates temporary artifacts directory on host
+            - runs docker create with runsc runtime and resource limits
+            - copies code_repo_path into /app inside container
+            - executes command as non-root user uid 1000
+            - copies /app directory back to host artifacts_path
+            - removes container in finally block
+
+        Security Architecture:
+            - rootless Docker
+               - container engine runs without host root privileges
+               - reduces impact of daemon or runtime compromise
+            - gVisor runsc runtime
+               - user-space kernel sandbox between container and host
+               - intercepts syscalls and enforces isolation boundaries
+            - non-root container user
+               - processes run as uid 1000 inside container
+               - prevents privileged operations even if escaped
+            - no bind mounts
+               - host filesystem never directly mounted into container
+               - data exchange limited to docker cp in and out
+            - ephemeral lifecycle
+               - new container per run
+               - no persistent state or long-lived credentials
+            - resource limits
+               - memory capped at 8 GB
+               - CPU limited to 4 cores
+               - mitigates denial-of-service via resource exhaustion
         """
         container_id: Optional[str] = None
         output_dir = tempfile.mkdtemp(prefix="sandbox_artifacts_")
 
         try:
-            #
             # Step 1: Create container
-            #
             create_cmd = [
                 "docker",
                 "create",
@@ -159,9 +217,7 @@ class DockerSandbox:
             container_id = create_proc.stdout.strip()
             self.logger.debug("Created container: %s", container_id)
 
-            #
             # Step 2: Copy code into container
-            #
             cp_in_cmd = ["docker", "cp", code_repo_path, f"{container_id}:/app"]
             self.logger.info("Copying code into container: %s", cp_in_cmd)
             cp_in_proc = subprocess.run(cp_in_cmd, capture_output=True, text=True)
@@ -169,9 +225,7 @@ class DockerSandbox:
                 raise ContainerRuntimeError(f"Failed to copy code into container:\n{cp_in_proc.stderr}")
             self.logger.debug("Copied code_repo_path '%s' into container.", code_repo_path)
 
-            #
             # Step 3: Start container (execute command) & capture output
-            #
             start_cmd = ["docker", "start", "-a", container_id]
             self.logger.info("Starting container: %s", start_cmd)
             start_proc = subprocess.run(start_cmd, capture_output=True, text=True)
@@ -180,9 +234,7 @@ class DockerSandbox:
             exit_code = start_proc.returncode
             self.logger.debug("Container execution exit code: %d", exit_code)
 
-            #
             # Step 4: Copy artifacts out of container
-            #
             cp_out_cmd = ["docker", "cp", f"{container_id}:/app", output_dir]
             self.logger.info("Copying artifacts out of container: %s", cp_out_cmd)
             cp_out_proc = subprocess.run(cp_out_cmd, capture_output=True, text=True)
@@ -190,9 +242,7 @@ class DockerSandbox:
                 # Attempt to remove container anyway, but warn about artifact copying failure
                 self.logger.warning("Failed to copy artifacts out: %s", cp_out_proc.stderr)
 
-            #
             # Raise on non-zero exit code
-            #
             if exit_code != 0:
                 raise ContainerRuntimeError(f"Container exited with non-zero code {exit_code}:\n{stderr}")
 
@@ -200,9 +250,7 @@ class DockerSandbox:
             return ExecutionResult(stdout=stdout, stderr=stderr, exit_code=exit_code, artifacts_path=output_dir)
 
         finally:
-            #
             # Step 5: Remove container in a finally block
-            #
             if container_id:
                 rm_cmd = ["docker", "rm", "-f", container_id]
                 self.logger.info("Removing container: %s", rm_cmd)
