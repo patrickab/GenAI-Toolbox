@@ -71,10 +71,10 @@ class DockerSandbox:
     (6) Daemon Isolation: Validates Rootless Docker.
     """
 
-    def __init__(self, image_name: str) -> None:
+    def __init__(self, dockerimage_name: str) -> None:
         self.logger = logging.getLogger(__name__)
         self.client = docker.from_env()
-        self.image_name = image_name
+        self.dockerimage_name = dockerimage_name
         self._verify_environment()
 
     def _verify_environment(self) -> None:
@@ -90,15 +90,15 @@ class DockerSandbox:
             if "runsc" not in info.get("Runtimes", {}):
                 raise SecurityEnvironmentError("gVisor 'runsc' runtime is not configured in Docker.")
 
-            self.client.images.get(self.image_name)
+            self.client.images.get(self.dockerimage_name)
         except docker.errors.ImageNotFound:
-            raise SecurityEnvironmentError(f"Docker image '{self.image_name}' not found.")
+            raise SecurityEnvironmentError(f"Docker image '{self.dockerimage_name}' not found.")
         except Exception as e:
             if isinstance(e, SecurityEnvironmentError):
                 raise e
             raise SecurityEnvironmentError(f"Environment check failed: {e}")
 
-    def run_interactive_shell(self, repo_path: str) -> None:
+    def run_interactive_shell(self, repo_path: str, agent_cmd: str) -> None:
         """
         Runs an interactive shell in the sandbox.
         Uses subprocess for the final 'run' call to ensure high-fidelity TTY hijacking.
@@ -106,29 +106,29 @@ class DockerSandbox:
         abs_repo_path = os.path.abspath(os.path.expanduser(repo_path))
         os.makedirs(abs_repo_path, exist_ok=True)
 
-        self.logger.info(f"Starting sandbox with image {self.image_name} at {abs_repo_path}")
+        self.logger.info(f"Starting sandbox with image {self.dockerimage_name} at {abs_repo_path}")
 
         # Constructing the docker run command
         cmd = [
             "docker",
             "run",
-            "-it",  # (1) Interactive TTY
-            "--rm",  # (4) Destroy after use
-            "--runtime=runsc",  # (5) gVisor isolation
-            "--user",
-            "1000:1000",  # Least Privilege: Enforce non-root UID
-            "--cap-drop=ALL",  # Defense in Depth: Drop all kernel capabilities
-            "--security-opt",
-            "no-new-privileges",  # Prevent setuid escalation
-            "--network",
-            "bridge",
-            "-v",
-            f"{abs_repo_path}:/workspace",  # (2) Bind mount for artifacts
-            "-w",
-            "/workspace",  # (3) Operating environment
-            self.image_name,
+            "-it",
+            "--rm",
+            "--runtime=runsc",
+            # In Rootless mode, we MUST run as internal root (0:0) to map correctly to external host user (1000:1000).
+            # Security is handled by the Rootless Daemon + gVisor, not by this flag.
+            "--user", "0:0", 
+            "--cap-drop=ALL",
+            "--security-opt", "no-new-privileges",
+            "--network", "bridge",
+            # Add ':z' to handle SELinux contexts (common on Linux) - tells Docker "This content is shared between containers and host"
+            "-v", f"{abs_repo_path}:/workspace:z", 
+            "-w", "/workspace",
+            "-e", "HOME=/workspace",    
+            self.dockerimage_name,
             "/bin/bash",
         ]
+        cmd.extend(["-c", agent_cmd])
 
         try:
             subprocess.run(cmd, check=True)

@@ -8,10 +8,20 @@ import git
 from pydantic import BaseModel, Field
 import streamlit as st
 
-from lib.agents.sandbox import DockerSandbox
+from dockersandbox.config import DOCKERTAG_AIDER
+from dockersandbox.sandbox import DockerSandbox
 from lib.streamlit_helper import model_selector
 
-ENV_VARS_AIDER = {"OLLAMA_API_BASE": "http://127.0.0.1:11434"}
+GIT_NAME = subprocess.run(["git", "config", "--global", "user.name"], capture_output=True, text=True).stdout.strip()
+GIT_EMAIL = subprocess.run(["git", "config", "--global", "user.email"], capture_output=True, text=True).stdout.strip()
+
+ENV_VARS_AIDER = {
+    "OLLAMA_API_BASE": "http://127.0.0.1:11434",
+    "GIT_AUTHOR_NAME": GIT_NAME,
+    "GIT_COMMITTER_NAME": GIT_NAME,
+    "GIT_AUTHOR_EMAIL": GIT_EMAIL,
+    "GIT_COMMITTER_EMAIL": GIT_EMAIL,
+    }
 
 DEFAULT_ARGS_AIDER = ["--dark-mode", "--code-theme", "inkpot", "--pretty"]
 
@@ -60,6 +70,10 @@ TCommand = TypeVar("TCommand", bound=AgentCommand)
 class CodeAgent(ABC, Generic[TCommand]):
     """Generic base class for Code Agents.
 
+    Class Attributes:
+        DOCKERTAG: str
+           - Docker image tag for agent execution
+
     Input:
         repo_url: str
            - HTTPS or SSH git URL
@@ -78,6 +92,8 @@ class CodeAgent(ABC, Generic[TCommand]):
         - clones or updates git repository
         - may install Python dependencies (if requirements.txt or pyproject.toml present)
     """
+
+    DOCKERTAG: str
 
     def __init__(self, repo_url: str, branch: str) -> None:
         self.repo_url: str = repo_url
@@ -184,11 +200,11 @@ class CodeAgent(ABC, Generic[TCommand]):
 
         # Build shell command string: env vars + executable + args
         arg_list: List[str] = [command.executable, *command.construct_args()]
-        shell_cmd = " ".join([*env_parts, subprocess.list2cmdline(arg_list)])
+        agent_shell_cmd = " ".join([*env_parts, subprocess.list2cmdline(arg_list)])
 
-        sandbox = DockerSandbox()
+        sandbox = DockerSandbox(dockerimage_name=f"{self.__class__.DOCKERTAG}:latest")
         try:
-            sandbox.run_interactive_shell(code_repo_path=str(command.workspace), cmd=shell_cmd)
+            sandbox.run_interactive_shell(repo_path=str(self.path_agent_workspace), agent_cmd=agent_shell_cmd)
         except Exception as exc:
             st.error(f"Failed to run agent in sandbox: {exc}")
             raise
@@ -246,6 +262,8 @@ class AiderCommand(AgentCommand):
 
 class Aider(CodeAgent[AiderCommand]):
     """Aider Code Agent."""
+
+    DOCKERTAG = DOCKERTAG_AIDER
 
     def ui_define_command(self) -> AiderCommand:
         """Define the Aider command with Streamlit UI."""

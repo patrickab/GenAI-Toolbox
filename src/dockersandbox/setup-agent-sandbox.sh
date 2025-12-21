@@ -3,6 +3,13 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
+# [ADD] Disclaimer about sandbox setup and assumptions
+echo -e "${YELLOW}[Disclaimer]${NC} This script sets up a Rootless Docker + gVisor sandbox."
+echo -e " • Ensure 'aider' (and other tools) are installed in one of the host's mounted bin dirs (e.g. /usr/local/bin)."
+echo -e " • Verify host & container share the same CPU architecture (x86_64 vs aarch64)."
+echo -e " • This script is tested on modern Debian/Ubuntu systems. Use at your own risk!"
+echo
+
 # Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -184,6 +191,20 @@ if [[ -n "$DOCKER_ROOTLESS" && -n "$DOCKER_RUNTIMES" ]]; then
     echo -e "  - gVisor Runtime: ${GREEN}Registered${NC}"
     echo -e "${YELLOW}IMPORTANT: Run 'source $SHELL_CONFIG' or restart your terminal to use docker.${NC}"
     echo -e "Test it with: docker run --rm --runtime=runsc hello-world"
+
+    # [ADD] Usage note for interactive sandbox with mounted host binaries
+    echo
+    echo -e "${BLUE}[+] To run an interactive sandbox with mounted host binaries, you can do:${NC}"
+    echo -e "${GREEN}docker run --runtime=runsc --init --user=1000:1000 -w /app \\"
+    echo -e "    -v /usr/bin:/usr/bin:ro \\"
+    echo -e "    -v /usr/lib:/usr/lib:ro \\"
+    echo -e "    -v /lib:/lib:ro \\"
+    echo -e "    -v /usr/local/bin:/usr/local/bin:ro \\"
+    echo -e "    -it agent-sandbox:latest \\"
+    echo -e "    bash${NC}"
+    echo
+    echo -e "That command provides a shell with read-only access to host binaries (like 'aider')."
+    echo -e "Enjoy your fully isolated rootless + gVisor sandbox!"
 else
     echo -e "${RED}WARNING: Verification failed.${NC}"
     echo "Rootless status (Expected 'rootless'): $DOCKER_ROOTLESS"
