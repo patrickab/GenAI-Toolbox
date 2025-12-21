@@ -1,3 +1,48 @@
+"""
+Security Architecture - Defense in Depth
+
+1. Zero-Trust Execution Policy
+
+    - "Assume Breach Principle":
+        All code is treated potentially malicious.
+
+2. Kernel-Level Isolation (gVisor)
+
+    - Sandboxed System Calls:
+        Uses the 'runsc' runtime to provide a dedicated 
+        guest kernel for the container.
+    - Host Protection:
+        Acts as a "firewall" between the container and the host 
+
+3. Hardened User Identity & Capability Stripping
+
+    - Globally remove Linux kernel capabilities (--cap-drop=ALL):
+        Container cannot perform system-level tasks.
+    - Enforce 'no-new-privileges':
+        Prevent privilege escalation attacks
+    - Non-Root Enforcement:
+        Containers are forced to run as an unprivileged user 
+        (UID 1000), removing administrative power by default.
+
+4. Rootless Infrastructure Architecture
+
+    - Unprivileged Daemon:
+        - Docker Engine runs without root privileges on the host
+    - Identity Mapping:
+        - Rootless Docker maps container root users to non-root host users,
+
+5. Ephemeral Lifecycle Management
+    - Destruction on Completion:
+        Containers are strictly temporary
+        Automatically destroyed after task execution. 
+
+6. Network Perimeter Control
+    - Traffic Segregation:
+        Places containers on isolated bridge networks to monitor and restrict data flow.
+    - Exfiltration Prevention:
+        Limits the container's ability to communicate with the internal network or move laterally to other services.
+"""
+
 import logging
 import os
 import subprocess
