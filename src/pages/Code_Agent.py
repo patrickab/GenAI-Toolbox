@@ -9,7 +9,7 @@ from llm_baseclient.config import OLLAMA_PORT
 from pydantic import BaseModel, Field
 import streamlit as st
 
-from dockersandbox.config import DOCKERTAG_AIDER
+from dockersandbox.config import DOCKERTAG_AIDER, DOCKERTAG_GEMINI, DOCKERTAG_QWEN
 from dockersandbox.sandbox import DockerSandbox
 from lib.streamlit_helper import model_selector
 
@@ -307,6 +307,31 @@ class Aider(CodeAgent[AiderCommand]):
 
         return cmd
 
+
+class GeminiCommand(AgentCommand):
+    """Gemini-specific command definition."""
+    pass  # Placeholder for future implementation
+
+class GeminiCodeAgent(CodeAgent[GeminiCommand]):
+    """Gemini Code Agent."""
+    DOCKERTAG = DOCKERTAG_GEMINI
+
+    def ui_define_command(self) -> GeminiCommand:
+        """Define the Gemini command with Streamlit UI."""
+        pass  # Placeholder for future implementation
+
+
+class QwenCommand(AgentCommand):
+    """Qwen-specific command definition."""
+    pass  # Placeholder for future implementation
+
+class QwenCodeAgent(CodeAgent[GeminiCommand]):
+    """Qwen Code Agent."""
+    DOCKERTAG = DOCKERTAG_QWEN
+
+    def ui_define_command(self) -> GeminiCommand:
+        """Define the Qwen command with Streamlit UI."""
+        pass  # Placeholder for future implementation
 
 # Agent registry: dynamic discovery for extensible multi-agent support
 agent_subclasses = CodeAgent.__subclasses__()
