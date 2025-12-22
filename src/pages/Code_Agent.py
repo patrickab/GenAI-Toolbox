@@ -136,15 +136,11 @@ class CodeAgent(ABC, Generic[TCommand]):
         if workspace.exists() and (workspace / ".git").exists():
             subprocess.run(
                 ["git", "-C", str(workspace), "pull"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
                 check=False,
             )
         else:
             subprocess.run(
                 ["git", "clone", "--branch", branch, repo_url, str(workspace)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
                 check=False,
             )
 
@@ -313,15 +309,16 @@ class GeminiCommand(AgentCommand):
 
     executable: str = "gemini"
 
+
 class Gemini(CodeAgent[GeminiCommand]):
     """Gemini Code Agent."""
+
     DOCKERTAG = DOCKERTAG_GEMINI
 
     def ui_define_command(self) -> GeminiCommand:
         """Define the Gemini command with Streamlit UI."""
         st.markdown("# Gemini Command")
         with st.expander("", expanded=True):
-
             # Extra raw flags/args if user wants to customize
             extra_args_str = st.text_input(
                 "Extra CLI arguments (optional)",
@@ -350,15 +347,16 @@ class QwenCommand(AgentCommand):
     # Baseclass constants
     executable: str = "qwen"
 
+
 class Qwen(CodeAgent[QwenCommand]):
     """Qwen Code Agent."""
+
     DOCKERTAG = DOCKERTAG_QWEN
 
     def ui_define_command(self) -> QwenCommand:
         """Define the Qwen command with Streamlit UI."""
         st.markdown("# Qwen Command")
         with st.expander("", expanded=True):
-
             extra_args_str = st.text_input(
                 "Extra CLI arguments (optional)",
                 value="",
