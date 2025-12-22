@@ -24,6 +24,7 @@ ENV_VARS_AIDER = {
     "GIT_COMMITTER_EMAIL": GIT_EMAIL,
     "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY", ""),
     "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
+    "OLLAMA_API_KEY": os.getenv("OLLAMA_API_KEY", ""),
 }
 
 DEFAULT_ARGS_AIDER = ["--dark-mode", "--code-theme", "inkpot", "--pretty"]
@@ -195,19 +196,19 @@ class CodeAgent(ABC, Generic[TCommand]):
             - runs agent inside secure Docker sandbox
         """
         env_parts: List[str] = []
-        full_env: Dict[str, str] = dict(os.environ)
-        if command.env_vars:
-            full_env.update(command.env_vars)
-            for k, v in command.env_vars.items():
-                env_parts.append(f"{k}={v}")
+        # if command.env_vars:
+        #     full_env.update(command.env_vars)
+        #     for k, v in command.env_vars.items():
+        #         env_parts.append(f"{k}={v}")
 
-        # Build shell command string: env vars + executable + args
         arg_list: List[str] = [command.executable, *command.construct_args()]
         agent_shell_cmd = " ".join([*env_parts, subprocess.list2cmdline(arg_list)])
 
         sandbox = DockerSandbox(dockerimage_name=f"{self.__class__.DOCKERTAG}:latest")
         try:
-            sandbox.run_interactive_shell(repo_path=str(self.path_agent_workspace), agent_cmd=agent_shell_cmd)
+            sandbox.run_interactive_shell(
+                repo_path=str(self.path_agent_workspace), agent_cmd=agent_shell_cmd, env_vars=command.env_vars
+            )
         except Exception as exc:
             st.error(f"Failed to run agent in sandbox: {exc}")
             raise

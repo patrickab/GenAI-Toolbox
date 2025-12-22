@@ -46,6 +46,7 @@ Security Architecture - Defense in Depth
 import logging
 import os
 import subprocess
+from typing import Dict, Optional
 
 import docker
 
@@ -56,6 +57,15 @@ class SecurityEnvironmentError(Exception):
 
 class ContainerRuntimeError(Exception):
     """Signal container lifecycle or execution failure."""
+
+
+# === Define secure loopback IP for host-container communication
+# === Rootless Docker disables host.docker.internal by default
+# Implements a Zero Trust bridge for Rootless Docker via a static loopback alias,
+# Ensures traffic is air-gapped from physical interfaces to prevent accidental exposure.
+# This stable target enables deterministic firewalling independent of host network changes.
+# Setup: `sudo ip addr add 10.200.200.1/32 dev lo`
+SECURE_LOOPBACK_IP = "10.200.200.1"
 
 
 class DockerSandbox:
@@ -98,7 +108,7 @@ class DockerSandbox:
                 raise e
             raise SecurityEnvironmentError(f"Environment check failed: {e}")
 
-    def run_interactive_shell(self, repo_path: str, agent_cmd: str) -> None:
+    def run_interactive_shell(self, repo_path: str, agent_cmd: str, env_vars: Optional[Dict[str, str]] = None) -> None:
         """
         Runs an interactive shell in the sandbox.
         Uses subprocess for the final 'run' call to ensure high-fidelity TTY hijacking.
@@ -117,10 +127,9 @@ class DockerSandbox:
             "--runtime=runsc",
             "--user",
             "0:0",  # Internal Root -> Host User 1000 (Rootless)
-            # --- NETWORKING FIXES ---
             "--network",
             "bridge",
-            "--add-host=host.docker.internal:host-gateway",
+            f"--add-host=host.docker.internal:{SECURE_LOOPBACK_IP}",
             "--dns",
             "8.8.8.8",
             # --- SECURITY/CAPABILITY ADJUSTMENTS ---
@@ -138,9 +147,15 @@ class DockerSandbox:
             "/workspace",
             "-e",
             "HOME=/workspace",
-            self.dockerimage_name,
-            "/bin/bash",
         ]
+
+        # Add environment variables to the command
+        if env_vars:
+            for key, value in env_vars.items():
+                cmd.extend(["-e", f"{key}={value}"])
+
+        cmd.append(self.dockerimage_name)
+        cmd.append("/bin/bash")
 
         # Command to log network traffic from sandbox to host
         # We use 'timeout' or backgrounding.
