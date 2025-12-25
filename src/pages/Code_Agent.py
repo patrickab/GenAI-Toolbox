@@ -1,4 +1,4 @@
-from code_agents.code_agents import agent_controls, chat_interface
+from code_agents.agents import agent_controls, chat_interface
 import streamlit as st
 
 if __name__ == "__main__":
