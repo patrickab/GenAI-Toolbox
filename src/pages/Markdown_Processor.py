@@ -32,11 +32,12 @@ def init_session_state() -> None:
         st.session_state.chunker_active = False
         st.session_state.is_md_merger_active = False
 
-        st.session_state.is_doc_edit_mode_active = {} # per document
-        st.session_state.is_chunk_edit_mode_active = {} # per chunk
+        st.session_state.is_doc_edit_mode_active = {}  # per document
+        st.session_state.is_chunk_edit_mode_active = {}  # per chunk
         st.session_state.staging_complete = False
-        st.session_state.is_payload_initialized = {} # boolean per document
+        st.session_state.is_payload_initialized = {}  # boolean per document
         st.session_state.rag_ingestion_payload = {}
+
 
 # ---------------------------- Preprocessing Step 1 - Move Paths / Fix Headings / Adjust MD Image Paths ---------------------------- #
 def _transform_headings(lines: list[str]) -> list[str]:
@@ -58,7 +59,9 @@ def _transform_headings(lines: list[str]) -> list[str]:
         processed.append(line)
     return processed
 
-IMAGE_PATH_PATTERN_SERVER = re.compile(r"!\[(.*?)\]\(images/") # used for mapping image paths to server URLs
+
+IMAGE_PATH_PATTERN_SERVER = re.compile(r"!\[(.*?)\]\(images/")  # used for mapping image paths to server URLs
+
 
 def _preprocess_document(doc_id: str) -> None:
     """Copies, cleans, and restructures a single document and its assets."""
@@ -87,13 +90,14 @@ def _preprocess_document(doc_id: str) -> None:
         dest_md_path.write_text(final_content, encoding="utf-8")
 
         if static_imgs_dest_path.is_dir():
-            referenced_images = {Path(url).name.rstrip(')') for url in IMAGE_LINK_PATTERN_MD.findall(final_content)}
+            referenced_images = {Path(url).name.rstrip(")") for url in IMAGE_LINK_PATTERN_MD.findall(final_content)}
             for img_file in static_imgs_dest_path.iterdir():
                 if img_file.is_file() and img_file.name not in referenced_images:
                     img_file.unlink()
 
     except (IOError, OSError) as e:
         st.error(f"Failed to process '{doc_id}': {e}")
+
 
 def _get_doc_ids(source_directory: str) -> list[str]:
     """Retrieves document IDs from the VLM output directory."""
@@ -102,9 +106,11 @@ def _get_doc_ids(source_directory: str) -> list[str]:
         return sorted([p.name for p in source_path.iterdir() if p.is_dir() and p.name != "archive"])
     return []
 
+
 def _get_doc_paths(base_dir: str) -> list[str]:
     subdirs = _get_doc_ids(base_dir)
     return [f"{base_dir}/{d}/{d}.md" for d in subdirs]
+
 
 def stage_vlm_outputs(source_directory: str) -> None:
     """
@@ -121,7 +127,9 @@ def stage_vlm_outputs(source_directory: str) -> None:
         _preprocess_document(doc_id)
         st.session_state.is_doc_edit_mode_active[doc_id] = False
 
-IMAGE_LINK_PATTERN_MD = re.compile(r"!\[.*?\]\s*\((?:.*?)\)") # used for extracting complete markdown image links
+
+IMAGE_LINK_PATTERN_MD = re.compile(r"!\[.*?\]\s*\((?:.*?)\)")  # used for extracting complete markdown image links
+
 
 def _render_document_editor(doc_id: str, base_path: Path) -> None:
     """Displays a markdown editor and preview for a single document."""
@@ -216,6 +224,7 @@ def _render_document_editor(doc_id: str, base_path: Path) -> None:
                 st.session_state.is_doc_edit_mode_active[doc_id] = False
                 st.rerun()
 
+
 def render_preprocessor() -> None:
     """
     Renders the UI for the first-level markdown preprocessing step.
@@ -258,6 +267,7 @@ def _run_llm_action(md_filepath: Path, user_message: str, system_prompt: str, ll
 
     md_filepath.write_text(processed_content, encoding="utf-8")
     st.rerun()
+
 
 def render_llm_preprocessor() -> None:
     """Use LLM to structure & enhance markdown documents."""
@@ -305,6 +315,7 @@ def render_llm_preprocessor() -> None:
     st.subheader("Preview")
     st.markdown(original_content, unsafe_allow_html=True)
 
+
 # ----------------------------- Preprocessing Step 3 - Chunking / Hierarchy / Parquet Storage ----------------------------- #
 class MetadataKeys:
     LEVEL = "level"
@@ -312,6 +323,7 @@ class MetadataKeys:
     KEY_H2 = "h2"
     KEY_H3 = "h3"
     CONTEXT_PATH = "context_path"
+
 
 METADATA_SCHEMA = {
     MetadataKeys.LEVEL: pl.Int8,
@@ -322,6 +334,7 @@ METADATA_SCHEMA = {
 }
 
 DEFAULT_HEADING = "<None>"
+
 
 def create_ingestion_payload(markdown_filepath: str) -> RAGIngestionPayload:
     """
@@ -446,9 +459,7 @@ def render_chunks(output_name: str) -> None:
         df = payload.df.with_row_index("index_order")
 
         # Parse metadata to determine hierarchy levels
-        df_meta = df.with_columns(
-            pl.col(DatabaseKeys.KEY_METADATA).str.json_decode(dtype=pl.Struct(METADATA_SCHEMA)).alias("meta")
-        )
+        df_meta = df.with_columns(pl.col(DatabaseKeys.KEY_METADATA).str.json_decode(dtype=pl.Struct(METADATA_SCHEMA)).alias("meta"))
 
         max_level = df_meta.select(pl.col("meta").struct.field("level").max()).item()
 
@@ -468,64 +479,61 @@ def render_chunks(output_name: str) -> None:
 
             if not children.is_empty():
                 # Extract grouping keys for join
-                children_keyed = children.with_columns([
-                    pl.col("meta").struct.field(k).alias(k) for k in group_keys
-                ])
-                parents_keyed = parents.with_columns([
-                    pl.col("meta").struct.field(k).alias(k) for k in group_keys
-                ])
+                children_keyed = children.with_columns([pl.col("meta").struct.field(k).alias(k) for k in group_keys])
+                parents_keyed = parents.with_columns([pl.col("meta").struct.field(k).alias(k) for k in group_keys])
 
                 # Aggregate children content (sort by index to maintain document flow)
                 children_agg = (
                     children_keyed.sort("index_order")
                     .group_by(group_keys)
-                    .agg([
-                        pl.col(DatabaseKeys.KEY_TITLE).str.join(" > ").alias("c_titles"),
-                        pl.col(DatabaseKeys.KEY_TXT_RETRIEVAL).str.join("\n\n").alias("c_texts"),
-                        # Remove first line (old context) from child embeddings before joining
-                        pl.col(DatabaseKeys.KEY_TXT_EMBEDDING)
-                          .str.replace(r"^[^\n]*\n", "")
-                          .str.strip_chars()
-                          .str.join("\n\n")
-                          .alias("c_embs")
-                    ])
+                    .agg(
+                        [
+                            pl.col(DatabaseKeys.KEY_TITLE).str.join(" > ").alias("c_titles"),
+                            pl.col(DatabaseKeys.KEY_TXT_RETRIEVAL).str.join("\n\n").alias("c_texts"),
+                            # Remove first line (old context) from child embeddings before joining
+                            pl.col(DatabaseKeys.KEY_TXT_EMBEDDING)
+                            .str.replace(r"^[^\n]*\n", "")
+                            .str.strip_chars()
+                            .str.join("\n\n")
+                            .alias("c_embs"),
+                        ]
+                    )
                 )
 
                 # Join parents with aggregated children and Update
-                merged_parents = parents_keyed.join(children_agg, on=group_keys, how="left").with_columns([
-                    # Append children titles
-                    pl.when(pl.col("c_titles").is_not_null())
-                      .then(pl.format("{} > {}", pl.col(DatabaseKeys.KEY_TITLE), pl.col("c_titles")))
-                      .otherwise(pl.col(DatabaseKeys.KEY_TITLE))
-                      .alias(DatabaseKeys.KEY_TITLE),
-
-                    # Append children text
-                    pl.when(pl.col("c_texts").is_not_null())
-                      .then(pl.format("{}\n\n{}", pl.col(DatabaseKeys.KEY_TXT_RETRIEVAL), pl.col("c_texts")))
-                      .otherwise(pl.col(DatabaseKeys.KEY_TXT_RETRIEVAL))
-                      .alias(DatabaseKeys.KEY_TXT_RETRIEVAL),
-
-                    # Append children embedding context (Use Merged Title as first line)
-                    pl.when(pl.col("c_embs").is_not_null())
-                      .then(pl.format(
-                          "{}\n\n{}\n\n{}",
-                          # 1. New Merged Title as First Line
-                          pl.format("{} > {}", pl.col(DatabaseKeys.KEY_TITLE), pl.col("c_titles")),
-                          # 2. Parent Body (Original Embedding minus first line)
-                          pl.col(DatabaseKeys.KEY_TXT_EMBEDDING).str.replace(r"^[^\n]*\n", "").str.strip_chars(),
-                          # 3. Aggregated Children Bodies
-                          pl.col("c_embs")
-                      ))
-                      .otherwise(pl.col(DatabaseKeys.KEY_TXT_EMBEDDING))
-                      .alias(DatabaseKeys.KEY_TXT_EMBEDDING),
-                ])
+                merged_parents = parents_keyed.join(children_agg, on=group_keys, how="left").with_columns(
+                    [
+                        # Append children titles
+                        pl.when(pl.col("c_titles").is_not_null())
+                        .then(pl.format("{} > {}", pl.col(DatabaseKeys.KEY_TITLE), pl.col("c_titles")))
+                        .otherwise(pl.col(DatabaseKeys.KEY_TITLE))
+                        .alias(DatabaseKeys.KEY_TITLE),
+                        # Append children text
+                        pl.when(pl.col("c_texts").is_not_null())
+                        .then(pl.format("{}\n\n{}", pl.col(DatabaseKeys.KEY_TXT_RETRIEVAL), pl.col("c_texts")))
+                        .otherwise(pl.col(DatabaseKeys.KEY_TXT_RETRIEVAL))
+                        .alias(DatabaseKeys.KEY_TXT_RETRIEVAL),
+                        # Append children embedding context (Use Merged Title as first line)
+                        pl.when(pl.col("c_embs").is_not_null())
+                        .then(
+                            pl.format(
+                                "{}\n\n{}\n\n{}",
+                                # 1. New Merged Title as First Line
+                                pl.format("{} > {}", pl.col(DatabaseKeys.KEY_TITLE), pl.col("c_titles")),
+                                # 2. Parent Body (Original Embedding minus first line)
+                                pl.col(DatabaseKeys.KEY_TXT_EMBEDDING).str.replace(r"^[^\n]*\n", "").str.strip_chars(),
+                                # 3. Aggregated Children Bodies
+                                pl.col("c_embs"),
+                            )
+                        )
+                        .otherwise(pl.col(DatabaseKeys.KEY_TXT_EMBEDDING))
+                        .alias(DatabaseKeys.KEY_TXT_EMBEDDING),
+                    ]
+                )
 
                 # Reassemble the dataframe (Grandparents + Merged Parents)
                 final_df = (
-                    pl.concat([
-                        grandparents.select(df.columns),
-                        merged_parents.select(df.columns)
-                    ])
+                    pl.concat([grandparents.select(df.columns), merged_parents.select(df.columns)])
                     .sort("index_order")
                     .drop("index_order")
                 )
@@ -555,7 +563,7 @@ def render_chunks(output_name: str) -> None:
             editor_key = f"editor_{unique_key_suffix}"
             original_text = row[DatabaseKeys.KEY_TXT_RETRIEVAL]
             edited_text = editor(text_to_edit=original_text, language="latex", key=editor_key, height=800)
-            edited_text # noqa
+            edited_text  # noqa
 
             if action_cols[0].button("Save", key=f"save_btn_{unique_key_suffix}"):
                 current_df = st.session_state.rag_ingestion_payload[output_name].df
@@ -600,6 +608,7 @@ def render_chunks(output_name: str) -> None:
                         with st.expander(f"{l3_row['h3']}"):
                             render_chunk(l3_row)
 
+
 def markdown_chunker() -> None:
     """
     Second level processing step:
@@ -613,11 +622,9 @@ def markdown_chunker() -> None:
         st.session_state.chunker_active = False
         return
 
-
     _, center, _ = st.columns([1, 8, 1])
 
     with center:
-
         if not st.session_state.is_md_merger_active:
             if st.button("Activate Markdown Merger"):
                 st.session_state.is_md_merger_active = True
@@ -628,7 +635,9 @@ def markdown_chunker() -> None:
                 st.rerun()
 
         if not st.session_state.is_md_merger_active:
-            selected_origin = st.radio("Select Markdown Source", options=["LLM Preprocessed", "Markdown Preprocessed"], key="md_chunker_source_selector")  # noqa
+            selected_origin = st.radio(
+                "Select Markdown Source", options=["LLM Preprocessed", "Markdown Preprocessed"], key="md_chunker_source_selector"
+            )  # noqa
 
             if selected_origin == "LLM Preprocessed":
                 directories_preprocessed_output = sorted(os.listdir(DIRECTORY_LLM_PREPROCESSING))
@@ -704,6 +713,7 @@ def markdown_chunker() -> None:
                     st.session_state.is_md_merger_active = False
                     st.rerun()
 
+
 # -------------------------------------- Main Application -------------------------------------- #
 def main() -> None:
     init_session_state()
@@ -711,7 +721,12 @@ def main() -> None:
         st.session_state.selected_model = model_selector(key="markdown_preprocessor")
         llm_params_sidebar()
         st.markdown("---")
-        selection = st.radio("Select Page", options=["Markdown Preprocessor","LLM Preprocessor", "Markdown Chunker", "View Document"], index=0, key="markdown_page_selector")  # noqa
+        selection = st.radio(
+            "Select Page",
+            options=["Markdown Preprocessor", "LLM Preprocessor", "Markdown Chunker", "View Document"],
+            index=0,
+            key="markdown_page_selector",
+        )  # noqa
 
     _, center, _ = st.columns([1, 8, 1])
     with center:
@@ -741,6 +756,7 @@ def main() -> None:
             if file is not None:
                 content = file.read().decode("utf-8")
                 st.markdown(content, unsafe_allow_html=True)
+
 
 if __name__ == "__main__":
     main()
