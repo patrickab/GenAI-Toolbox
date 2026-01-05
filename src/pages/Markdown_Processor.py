@@ -254,16 +254,17 @@ def render_preprocessor() -> None:
 
 
 # -------------------------------------- Preprocessing Step 2 - LLM Formatting / Enhancement -------------------------------------- #
-def _run_llm_action(md_filepath: Path, user_message: str, system_prompt: str, llm_kwargs: dict) -> None:
+def _run_llm_action(md_filepath: Path, user_msg: str, system_prompt: str, llm_kwargs: dict) -> None:
     """Helper to run an LLM action, update file, and notify user."""
     with st.spinner("Processing document..."):
-        stream = st.session_state.client.api_query(
-            model=st.session_state.md_model,
-            user_message=user_message,
+        response = st.session_state.client.api_query(
+            model=st.session_state.selected_model,
+            user_msg=user_msg,
             system_prompt=system_prompt,
+            stream=False,
             **llm_kwargs,
         )
-        processed_content = "".join(chunk for chunk in stream)
+        processed_content = response.choices[0].message.content
 
     md_filepath.write_text(processed_content, encoding="utf-8")
     st.rerun()
@@ -301,16 +302,16 @@ def render_llm_preprocessor() -> None:
         st.rerun()
 
     if st.button("LLM Preprocess Document", key=f"llm_preprocess_{selected_document}"):
-        user_message = f"""
+        user_msg = f"""
         Enhance the following document for clarity, structure, and completeness while preserving all original information\n
         Level 1 Heading: # {lvl_1_heading.strip()}\n
         ---\n<original content>\n{original_content}\n</original content>
         """
-        _run_llm_action(dest_md_filepath, user_message, SYS_LECTURE_SUMMARIZER, llm_kwargs)
+        _run_llm_action(dest_md_filepath, user_msg, SYS_LECTURE_SUMMARIZER, llm_kwargs)
 
     if st.button("LLM Enhance Document", key=f"llm_enhance_{selected_document}"):
-        user_message = f"<original content>\n{original_content}\n</original content>"
-        _run_llm_action(dest_md_filepath, user_message, SYS_LECTURE_ENHENCER, llm_kwargs)
+        user_msg = f"<original content>\n{original_content}\n</original content>"
+        _run_llm_action(dest_md_filepath, user_msg, SYS_LECTURE_ENHENCER, llm_kwargs)
 
     st.subheader("Preview")
     st.markdown(original_content, unsafe_allow_html=True)
