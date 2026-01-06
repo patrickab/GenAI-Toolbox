@@ -249,6 +249,7 @@ class DataFrame_Bot:
 
 
 if __name__ == "__main__":
+    st.set_page_config(page_title="DataFrame Bot", page_icon=":robot:", layout="wide")
     sidebar()
     df_bot = DataFrame_Bot()
     df_bot.render_streamlit()

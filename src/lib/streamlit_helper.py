@@ -363,7 +363,6 @@ def paste_img_button() -> PasteResult:
     # 3. Processing and State Control
     if st.session_state.use_resize:
         st.session_state.api_img = downscale_img(paste_result.image_data, **params)
-        st.image(paste_result.image_data, caption="Pasted Image (original)")
         st.image(st.session_state.api_img, caption="Pasted Image (resized)")
     else:
         # Raw conversion to Base64 without scaling

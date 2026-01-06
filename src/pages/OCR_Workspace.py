@@ -66,4 +66,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    st.set_page_config(page_title="OCR Workspace", page_icon=":robot:", layout="wide")
     main()
