@@ -1,4 +1,4 @@
-# Giagachad Bot
+# GenAI Swiss Army Knife
 
 A collection of GenAI utilities for personal use. Created to make my workflows easier & more efficient.
 
@@ -29,3 +29,4 @@ https://github.com/user-attachments/assets/c21ec4b0-2c92-419c-a46e-36453efce309
 - Create a virtual environment using `uv sync`.
 - Activate your virtual environment using `source .venv/bin/activate`
 - Use `./run.sh` to start the application
+
