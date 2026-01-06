@@ -99,7 +99,7 @@ def rag_sidebar() -> None:
 
         st.session_state.selected_embedding_model = st.selectbox(
             "Select Embedding Model",
-            options=list(MODEL_CONFIG.keys()),
+            options=[model.split("/")[1] for model in MODEL_CONFIG.keys()],
             index=list(MODEL_CONFIG.keys()).index(DEFAULT_EMBEDDING_MODEL),
         )
 
@@ -110,7 +110,8 @@ def rag_sidebar() -> None:
         unique_database_labels = set()
         for embedding_file in available_database_embeddings:
             for model_name in MODEL_CONFIG:
-                suffix = f"_{model_name}.parquet"
+                # remove provider prefix
+                suffix = f"_{model_name.split("/")[1]}.parquet"
                 if embedding_file.endswith(suffix):
                     unique_database_labels.add(embedding_file.removesuffix(suffix))
                     break
@@ -127,12 +128,13 @@ def rag_sidebar() -> None:
             with nyan_cat_spinner():
                 selection = st.session_state.selected_rag_database
                 model = st.session_state.selected_embedding_model
+                model_without_prefix = model.split("/")[1]
 
                 if selection == DATABASE_LABEL_OBSIDIAN:
                     rag_db, payload = obsidian_dataloader(model=model)
                 else:
                     payload_path = Path(f"{DIRECTORY_RAG_INPUT}/{selection}/{selection}_ingestion_payload.parquet")
-                    embedding_path = Path(f"{DIRECTORY_EMBEDDINGS}/{selection}_{model}.parquet")
+                    embedding_path = Path(f"{DIRECTORY_EMBEDDINGS}/{selection}_{model_without_prefix}.parquet")
                     rag_db, payload = load_parquet_data(
                         payload_path=payload_path,
                         embedding_path=embedding_path,
@@ -143,7 +145,7 @@ def rag_sidebar() -> None:
 
             # Create nested dictionary structure to allow different embeddings for the same documents - will be used for benchmarking
             st.session_state.rag_databases.setdefault(selection, {})
-            st.session_state.rag_databases[selection][model] = rag_db
+            st.session_state.rag_databases[selection][model_without_prefix] = rag_db
 
         with st.expander("RAG Databases in Memory", expanded=True):
 
@@ -168,7 +170,7 @@ def rag_workspace() -> None:
         prompt = st.chat_input("Send a message", key="chat_input")
 
     if prompt:
-        rag_db: RagDatabase = st.session_state.rag_databases[st.session_state.selected_rag_database][st.session_state.selected_embedding_model] # noqa
+        rag_db: RagDatabase = st.session_state.rag_databases[st.session_state.selected_rag_database][st.session_state.selected_embedding_model.split("/")[1]] # noqa
         query = RAGQuery(query=prompt, k_documents=st.session_state.k_query_documents)
         rag_response = rag_db.rag_process_query(rag_query=query)
         with st.chat_message("user"):
