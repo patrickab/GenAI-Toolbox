@@ -29,17 +29,14 @@ def ocr_workspace() -> None:
     client: LLMClient = st.session_state.client
 
     if img != EMPTY_PASTE_RESULT and img is not None:
-        stream = st.write_stream(
-            client.api_query(
+        response = client.api_query(
                 model=model,
                 system_prompt=SYS_OCR_TEXT_EXTRACTION,
                 img=img,
-                stream=True,
+                stream=False,
             )
-        )
         # Todo: Rewrite LLM Client to return only text instead of response objects
-        st.session_state.ocr_response = stream
-
+        st.session_state.ocr_response = response.choices[0].message.content
         img_hash = get_img_hash(st.session_state.pasted_image)
         st.session_state.sent_hashes.add(img_hash)
         st.session_state.imgs_sent.append(st.session_state.pasted_image)
