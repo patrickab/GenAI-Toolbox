@@ -1,9 +1,6 @@
 # GenAI Toolbox
 A collection of GenAI utilities for personal use. Created to make my workflows easier & more efficient.
 
-## Demo
-https://github.com/user-attachments/assets/4a977472-dfbb-4166-a53e-c3c35025a939
-
 ## Core Features
 - Customizable library of system prompts for recurring tasks.
 - Unified access to 2100+ models from 100+ providers using [LiteLLM](https://models.litellm.ai/) 
@@ -16,6 +13,9 @@ https://github.com/user-attachments/assets/4a977472-dfbb-4166-a53e-c3c35025a939
   - Ingestion of RAG payloads into a lightweight RAG Database [see here](https://github.com/patrickab/rag-database/tree/main).
 - Optical Character Recognition (OCR) for Screenshot-to-LaTeX extraction - including web-based editor.
 
+## Demo
+https://github.com/user-attachments/assets/4a977472-dfbb-4166-a53e-c3c35025a939
+
 ## Further Features
 - Token-efficient image compression for fast local inference at scale.
 - Store responses directly into [Obsidian](https://obsidian.md/) vault (with automatically generated YAML-headers).
@@ -27,5 +27,6 @@ https://github.com/user-attachments/assets/4a977472-dfbb-4166-a53e-c3c35025a939
 - Create a virtual environment using `uv sync`.
 - Activate your virtual environment using `source .venv/bin/activate`
 - Use `./run.sh` to start the application
+
 
 
