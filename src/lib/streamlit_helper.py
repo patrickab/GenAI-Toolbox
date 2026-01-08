@@ -35,6 +35,7 @@ from lib.prompts import (
     SYS_CODE_OPERATOR,
     SYS_CONCEPT_IN_DEPTH,
     SYS_CONCEPTUAL_OVERVIEW,
+    SYS_DOCUMENTATION_GENERATOR,
     SYS_EMPTY_PROMPT,
     SYS_MATH_PROOF,
     SYS_PROMPT_ENGINEER,
@@ -72,6 +73,7 @@ AVAILABLE_PROMPTS = {
     "Concept - In-Depth": SYS_CONCEPT_IN_DEPTH,
     "Concept - Article": SYS_ARTICLE,
     "Prompt Engineer": SYS_PROMPT_ENGINEER,
+    "Documentation Generator": SYS_DOCUMENTATION_GENERATOR,
     "<empty prompt>": SYS_EMPTY_PROMPT,
 }
 
