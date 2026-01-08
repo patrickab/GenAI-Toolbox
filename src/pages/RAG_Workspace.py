@@ -99,7 +99,7 @@ def rag_sidebar() -> None:
 
         st.session_state.selected_embedding_model = st.selectbox(
             "Select Embedding Model",
-            options=[model.split("/")[1] for model in MODEL_CONFIG.keys()],
+            options=list(MODEL_CONFIG.keys()),
             index=list(MODEL_CONFIG.keys()).index(DEFAULT_EMBEDDING_MODEL),
         )
 
