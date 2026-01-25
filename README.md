@@ -1,29 +1,26 @@
-# Giagachad Bot
-
-A knowledge-management assistant with flexible, customizable behavior.
-Use your own chatbot
-- (a) via CPU/GPU local inference
-- (b) via API-Calls to your preferred provider
-- **currently tested**: OpenAI, Gemini, Ollama
-- **currently supported**: any [litellm](https://www.litellm.ai/) compatible provider works
-
-Permanently adjust knowledge level to your background - no more answers, that are too trivial or too complex.
-The sidebar allows you to select pre-defined system prompts and swap models on the fly, giving you fine-grained control over your assistants behavior.
+# GenAI Toolbox
+A collection of utilities for personal use. Created for experimenting & making my workflows more efficient.
 
 ## Core Features
+- Customizable library of system prompts for recurring tasks.
+- Unified access to 2100+ models from 100+ providers using [LiteLLM](https://models.litellm.ai/) 
+- CPU/GPU local inference using [vLLM](https://docs.vllm.ai/en/latest/) and [Ollama](https://ollama.com/).
+- Automatic VRAM ressource & localhost server management.
 - Retrieval Augmented Generation (RAG).
-- Optical Character Recognition (OCR) and img-to-LaTeX, including web-based code-editor.
-- Clean markdown/LaTeX formatting.
-- Automatic adjustment of the answer length to the complexity of your query.
-- Fine-grained control over answer length via flexible system prompts.
-- Chat History Management & Storage on your local disk.
-- Manage your own prompt library & flexibly adjust chatbot behavior as you talk.
-- Store responses from the website directly in your [Obsidian](https://obsidian.com) vault.
-- Automatically generated YAML-headers for your Obsidian notes.
+- RAG data pipeline (preparation/extraction/ingestion).
+  - Visual Language Model (VLM) PDF-2-Markdown conversion using [MinerU](https://github.com/opendatalab/MinerU)
+  - Markdown Post-Processing using RegEx & LLMs to guarantee RAG-compatible format.
+  - Ingestion of RAG payloads into a lightweight RAG Database [see here](https://github.com/patrickab/rag-database/tree/main).
+- Optical Character Recognition (OCR) for Screenshot-to-LaTeX extraction - including web-based editor.
 
 ## Demo
+https://github.com/user-attachments/assets/4a977472-dfbb-4166-a53e-c3c35025a939
 
-https://github.com/user-attachments/assets/c21ec4b0-2c92-419c-a46e-36453efce309
+## Further Features
+- Token-efficient image compression for fast local inference at scale.
+- Store responses directly into [Obsidian](https://obsidian.md/) vault (with automatically generated YAML-headers).
+- Chat History Management & Storage on local disk.
+- ...and much more to explore :)
 
 ## Installation & Setup
 - Clone the repo.
@@ -32,8 +29,8 @@ https://github.com/user-attachments/assets/c21ec4b0-2c92-419c-a46e-36453efce309
 - Activate your virtual environment using `source .venv/bin/activate`
 - Use `./run.sh` to start the application
 
-## Work in Progress
-- OCR-based PDF miner for conversion of entire books into embeddings.
+
+
 
 
 
