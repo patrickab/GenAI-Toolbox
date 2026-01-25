@@ -149,12 +149,12 @@ def vlm_markdown_miner() -> None:
     """)
 
     if st.button("Run VLM Markdown Miner", key="run_vlm_markdown_miner"):
+        os.makedirs(DIRECTORY_VLM_OUTPUT, exist_ok=True)
         with nyan_cat_spinner(), st.spinner("Installing mineru package..."):
             subprocess.run(["uv", "pip", "install", "mineru[core]"])    
 
         with nyan_cat_spinner():
-            run_command_with_output(["bash", "src/static/pdf-minerU.sh"])
-    subprocess.run(["bash", "mv", "converted*", DIRECTORY_VLM_OUTPUT])
+            run_command_with_output(["bash", "src/static/pdf-minerU.sh", DIRECTORY_VLM_OUTPUT])
 
 if __name__ == "__main__":
     vlm_markdown_miner()

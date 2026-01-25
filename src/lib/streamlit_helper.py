@@ -318,7 +318,7 @@ def paste_img_button() -> PasteResult:
     if st.session_state.use_resize:
         with st.expander("Compression Configurations"):
             c1, c2 = st.columns(2)
-            params["max_tokens"] = c1.number_input("Max Tokens", value=800, step=100)
+            params["max_tokens"] = c1.number_input("Max Tokens", value=300, step=100)
             params["grid_size"] = c1.number_input("Grid Size", value=28, step=1)
             params["tokens_per_patch"] = c1.number_input("Tokens per Patch", value=1)
             params["output_format"] = c2.selectbox("Format", ["PNG", "JPEG"], index=0)
