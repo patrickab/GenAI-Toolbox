@@ -11,8 +11,8 @@ NANOTASK_MODEL = "ollama/devstral-2:123b-cloud"
 
 # --- Static Model Definitions ---
 MODELS_GEMINI = [
-    "gemini/gemini-3-pro-preview",
     "gemini/gemini-3-flash-preview",
+    "gemini/gemini-3-pro-preview",
     "gemini/gemini-2.5-flash-lite",
     "ollama/gemini-3-pro-preview",
 ]
