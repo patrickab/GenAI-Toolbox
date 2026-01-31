@@ -8,6 +8,7 @@ HUGGINGFACE_DIR = os.path.join(HOME, ".cache", "huggingface", "hub")
 
 # --- Model Defaults ---
 NANOTASK_MODEL = "ollama/devstral-2:123b-cloud"
+DEFAULT_VISION_MODEL = "ollama/qwen3-vl:235b-instruct-cloud"
 
 # --- Static Model Definitions ---
 MODELS_GEMINI = [

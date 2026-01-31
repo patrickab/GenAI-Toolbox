@@ -11,11 +11,12 @@ from lib.streamlit_helper import (
     EMPTY_PASTE_RESULT
 )
 from llm_client import LLMClient
-
+from llm_config import DEFAULT_VISION_MODEL
 
 def ocr_sidebar() -> None:
     with st.sidebar:
-        st.session_state.selected_model_ocr = model_selector(key="ocr_workspace")
+        #st.session_state.selected_model_ocr = model_selector(key="ocr_workspace")
+        st.session_state.selected_model_ocr = DEFAULT_VISION_MODEL
 
         paste_img_button()
 
