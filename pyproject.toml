@@ -8,7 +8,7 @@ dependencies = [
     "ansi2html>=1.9.2",
     "litellm>=1.80.5",
     "llm-baseclient @ git+ssh://git@github.com/patrickab/llm-baseclient.git@main",
-    "networkx>=3.3",
+    "networkx>=3.6.1",
     "numpy>=2.3.2",
     "polars>=1.32.3",
     "plotly>=6.7.0",
