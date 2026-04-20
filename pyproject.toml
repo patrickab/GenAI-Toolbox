@@ -10,7 +10,7 @@ dependencies = [
     "llm-baseclient @ git+ssh://git@github.com/patrickab/llm-baseclient.git@main",
     "networkx>=3.3",
     "numpy>=2.3.2",
-    "polars>=1.32.3",
+    "polars>=1.40.0",
     "plotly>=6.7.0",
     "pymupdf4llm>=0.0.27",
     "rag-database @ git+ssh://git@github.com/patrickab/rag-database.git@main",
