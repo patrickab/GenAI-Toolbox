@@ -12,7 +12,7 @@ dependencies = [
     "numpy>=2.3.2",
     "polars>=1.41.0",
     "plotly>=6.7.0",
-    "pymupdf4llm>=1.27.2.2",
+    "pymupdf4llm>=1.27.2.3",
     "rag-database @ git+ssh://git@github.com/patrickab/rag-database.git@main",
     "st-copy>=1.1.2",
     "streamlit[pdf]>=1.56.0",
