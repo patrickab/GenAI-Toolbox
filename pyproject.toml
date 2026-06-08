@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "Agents-in-a-box @ git+ssh://git@github.com/patrickab/Agents-in-a-box.git",
     "ansi2html>=1.9.2",
-    "litellm>=1.86.0",
+    "litellm>=1.88.0",
     "llm-baseclient @ git+ssh://git@github.com/patrickab/llm-baseclient.git@main",
     "networkx>=3.6.1",
     "numpy>=2.3.2",
