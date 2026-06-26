@@ -9,7 +9,7 @@ dependencies = [
     "litellm>=1.89.3",
     "llm-baseclient @ git+ssh://git@github.com/patrickab/llm-baseclient.git@main",
     "networkx>=3.6.1",
-    "numpy>=2.4.6",
+    "numpy>=2.5.0",
     "polars>=1.41.2",
     "plotly>=6.8.0",
     "pymupdf4llm>=1.27.2.3",
